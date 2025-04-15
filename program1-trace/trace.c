@@ -11,7 +11,6 @@ void arp();
 void ip();
 void tcp();
 void udp();
-// int is_tcp_chksum_valid(const u_int8_t *packet, int ip_hdr_len);
 char *port_name(u_int16_t port);
 
 int main(int argc, char *argv[])
@@ -94,13 +93,13 @@ int main(int argc, char *argv[])
             arp(packet); // pull ARP header
             break;
         default:
-            printf("Unknown packet type\n");
+            printf("Unknown packet type\n"); // just for debugging
             break;
         }
     }
     if (result == -1)
     {
-        fprintf(stderr, "Error reading pcap file: %s\n", pcap_geterr(handle));
+        fprintf(stderr, "Error reading pcap file: %s\n", pcap_geterr(handle)); // just for debugging
         pcap_close(handle);
         return EXIT_FAILURE;
     }
@@ -115,7 +114,6 @@ void ethernet(const u_int8_t *packet)
 
     u_int8_t eth_dest[6]; // destination MAC address
     u_int8_t eth_src[6];  // source MAC address
-    // u_int16_t eth_type = ntohs(*(u_int16_t *)(packet + 12));
     u_int16_t eth_type;
 
     memcpy(eth_dest, packet, 6);
@@ -142,10 +140,6 @@ void ip(const u_int8_t *packet, int ip_hdr_len)
     // checksum calcs
     u_int16_t expected = ntohs(*(u_int16_t *)(packet + 24));
     u_int16_t actual = in_cksum((u_int16_t *)(packet + ETHER_HDR_LEN), ip_hdr_len);
-
-    // printf("\t\tPacket pointer: %p\n", (void *)packet);
-    // printf("\t\tPacket+ETHER_HDR_LEN pointer: %p\n", (void *)(packet + ETHER_HDR_LEN));
-    // printf("\t\tData at Packet+ETHER_HDR_LEN: 0x%02x\n", *(packet + ETHER_HDR_LEN));
 
     printf("\n\tIP Header\n");
     printf("\t\tIP PDU Len: %d\n", ntohs(*(u_int16_t *)(packet + 16)));
@@ -234,13 +228,12 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
     pseudo.zero = 0;
     pseudo.protocol = packet[23];
     pseudo.tcp_len = htons(tcp_seg_len); // 2 bytes of TCP length starting at 16 kept in network byte order for checksum calc
-    // pseudo.tcp_len = *(u_int16_t *)((packet + 16) - ip_hdr_len); // 2 bytes of TCP length starting at 16 kept in network byte order for checksum calc
 
     // allocate buff on stack: pseudo_hdr (12 bytes) + TCP segment (variable length)
     u_int8_t buff[sizeof(struct pseudo_hdr) + tcp_seg_len];
     memcpy(buff, &pseudo, sizeof(struct pseudo_hdr));                 // copy pseudo header to buff
     memcpy(buff + sizeof(struct pseudo_hdr), tcp_start, tcp_seg_len); // advance buff's ptr by size of pseudo and copy TCP segment to buff
-    
+
     // checksum calcs
     u_int16_t expected = ntohs(*(u_int16_t *)(tcp_start + 16));                              // pull checksum from TCP header
     u_int16_t actual = in_cksum((u_int16_t *)buff, sizeof(struct pseudo_hdr) + tcp_seg_len); // calculate checksum
@@ -274,42 +267,6 @@ void udp(const u_int8_t *packet)
     printf("\t\tSource Port:  %s\n", port_name(ntohs(*(u_int16_t *)(packet))));
     printf("\t\tDest Port:  %s\n", port_name(ntohs(*(u_int16_t *)(packet + 2))));
 }
-
-// // tcp checksum validation
-// int is_tcp_chksum_valid(const u_int8_t *packet, int ip_hdr_len)
-// {
-//     u_int16_t ip_total_len = ntohs(*(u_int16_t *)(packet + 16));
-//     u_int32_t tcp_len = ip_total_len - ip_hdr_len;
-//     const u_int8_t *tcp_start = packet + ETHER_HDR_LEN + ip_hdr_len; // start of TCP segment in memory
-
-//     // build pseudo header
-//     struct pseudo_hdr
-//     {
-//         uint32_t src_ip_addr;
-//         uint32_t dest_ip_addr;
-//         uint8_t zero;
-//         uint8_t protocol;
-//         uint16_t tcp_len;
-//     };
-
-//     struct pseudo_hdr pseudo;
-//     pseudo.src_ip_addr = ntohl(*(u_int32_t *)(packet + 26));  // 4 bytes of source IP starting at 26
-//     pseudo.dest_ip_addr = ntohl(*(u_int32_t *)(packet + 30)); // 4 bytes of destination IP starting at 30
-//     pseudo.zero = 0;
-//     pseudo.protocol = packet[23];
-//     pseudo.tcp_len = *(u_int16_t *)(packet + 16) - ip_hdr_len; // 2 bytes of TCP length starting at 16 kept in network byte order for checksum calc
-
-//     // allocate buff on stack: pseudo_hdr (12 bytes) + TCP segment (variable length)
-//     uint8_t buff[sizeof(struct pseudo_hdr) + tcp_len];
-//     memcpy(buff, &pseudo, sizeof(struct pseudo_hdr));                       // copy pseudo header to buff
-//     memcpy(buff + sizeof(struct pseudo_hdr), packet + ip_hdr_len, tcp_len); // copy TCP segment to buff
-
-//     // checksum calcs
-//     u_int16_t expected = ntohs(*(u_int16_t *)(tcp_start + 16));                          // pull checksum from TCP header
-//     u_int16_t actual = in_cksum((u_int16_t *)buff, sizeof(struct pseudo_hdr) + tcp_len); // calculate checksum
-
-//     return actual == 0; // check if checksum is valid
-// }
 
 // helper function to get port name
 char *port_name(u_int16_t port)
