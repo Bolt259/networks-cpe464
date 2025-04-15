@@ -12,6 +12,20 @@
 #define ETHER_TYPE_ARP 0x0806
 
 #define ETHER_HDR_LEN 14
+#define IP_SRC_OFFSET 26
+#define IP_DEST_OFFSET 30
+#define TCP_CHECKSUM_OFFSET 16
+
+#define PROTOCOL_ICMP 1
+#define PROTOCOL_TCP 6
+#define PROTOCOL_UDP 17
+
+#define PROTOCOL_HTTP 80
+#define PROTOCOL_FTP 21
+#define PROTOCOL_TELNET 23
+#define PROTOCOL_SMTP 25
+#define PROTOCOL_DNS 53
+#define PROTOCOL_POP3 110
 
 // pseudo header struct for TCP checksum calculation
 struct pseudo_hdr

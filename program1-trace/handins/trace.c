@@ -5,12 +5,12 @@
 #include "checksum.h"
 
 // function declarations
-void ethernet();
-void icmp();
-void arp();
-void ip();
-void tcp();
-void udp();
+void ethernet(const u_int8_t *packet);
+void icmp(const u_int8_t *packet);
+void arp(const u_int8_t *packet);
+void ip(const u_int8_t *packet, int ip_hdr_len);
+void tcp(const u_int8_t *packet, int ip_hdr_len);
+void udp(const u_int8_t *packet);
 char *port_name(u_int16_t port);
 
 int main(int argc, char *argv[])
@@ -75,13 +75,13 @@ int main(int argc, char *argv[])
 
             switch (protocol)
             {
-            case 1:
+            case PROTOCOL_ICMP:
                 icmp(prev_hdr_block_len); // pull ICMP header
                 break;
-            case 6:
+            case PROTOCOL_TCP:
                 tcp(packet, ip_hdr_len); // pull TCP header
                 break;
-            case 17:
+            case PROTOCOL_UDP:
                 udp(prev_hdr_block_len); // pull UDP header
                 break;
             default:
@@ -155,8 +155,6 @@ void ip(const u_int8_t *packet, int ip_hdr_len)
         (actual == 0) ? "Correct" : "Incorrect", // actual checksum is 0 if valid
         expected);
 
-    // printf("\t\tactual: 0x%04x\n", actual);     // REMOVE THIS FOR DEBUGGING!!!
-
     printf(
         "\t\tSender IP: %d.%d.%d.%d\n",
         packet[26], packet[27], packet[28], packet[29]);
@@ -165,7 +163,7 @@ void ip(const u_int8_t *packet, int ip_hdr_len)
         packet[30], packet[31], packet[32], packet[33]);
 }
 
-// icmp header - check type cause idk
+// icmp header
 void icmp(const u_int8_t *packet)
 {
     printf("\n\tICMP Header\n");
@@ -223,8 +221,8 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
     };
 
     struct pseudo_hdr pseudo;
-    pseudo.src_ip_addr = *(u_int32_t *)(packet + 26);  // 4 bytes of source IP starting at 26
-    pseudo.dest_ip_addr = *(u_int32_t *)(packet + 30); // 4 bytes of destination IP starting at 30
+    pseudo.src_ip_addr = *(u_int32_t *)(packet + IP_SRC_OFFSET);  // 4 bytes of source IP starting at 26
+    pseudo.dest_ip_addr = *(u_int32_t *)(packet + IP_DEST_OFFSET); // 4 bytes of destination IP starting at 30
     pseudo.zero = 0;
     pseudo.protocol = packet[23];
     pseudo.tcp_len = htons(tcp_seg_len); // 2 bytes of TCP length starting at 16 kept in network byte order for checksum calc
@@ -235,7 +233,7 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
     memcpy(buff + sizeof(struct pseudo_hdr), tcp_start, tcp_seg_len); // advance buff's ptr by size of pseudo and copy TCP segment to buff
 
     // checksum calcs
-    u_int16_t expected = ntohs(*(u_int16_t *)(tcp_start + 16));                              // pull checksum from TCP header
+    u_int16_t expected = ntohs(*(u_int16_t *)(tcp_start + TCP_CHECKSUM_OFFSET));                              // pull checksum from TCP header
     u_int16_t actual = in_cksum((u_int16_t *)buff, sizeof(struct pseudo_hdr) + tcp_seg_len); // calculate checksum
 
     printf("\n\tTCP Header\n");
@@ -273,17 +271,17 @@ char *port_name(u_int16_t port)
 {
     switch (port)
     {
-    case 80:
+    case PROTOCOL_HTTP:
         return "HTTP";
-    case 21:
+    case PROTOCOL_FTP:
         return "FTP";
-    case 23:
+    case PROTOCOL_TELNET:
         return "Telnet";
-    case 25:
+    case PROTOCOL_SMTP:
         return "SMTP";
-    case 53:
+    case PROTOCOL_DNS:
         return "DNS";
-    case 110:
+    case PROTOCOL_POP3:
         return "POP3";
     default:
     {

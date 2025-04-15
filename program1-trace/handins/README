@@ -1,0 +1,10 @@
+Lukas Shipley
+Lab Time: 12pm noon section
+
+I decided to go structless and directly access all the packet information
+using offsets. I added a translation function to help with port names.
+I considered breaking up tcp function but no function is over 50 lines
+and I ran out of time. As requested masks instead of byte shifts are used.
+I couldn't figure out a good way to mask off half the byte and have it retain
+its initial value for the data offset field in the tcp header, so I
+reluctantly divided by 16.
