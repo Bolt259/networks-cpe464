@@ -40,7 +40,7 @@ struct pseudo_hdr {
     u_int32_t dest_ip_addr;
     u_int8_t zero;
     u_int8_t protocol;
-    u_int16_t length;
+    u_int16_t tcp_len;
 };
 
 
@@ -50,7 +50,10 @@ void ethernet(const u_int8_t *packet);
 void icmp(const u_int8_t *packet);
 void arp(const u_int8_t *packet);
 void ip(const u_int8_t *packet, int ip_hdr_len);
-void tcp(const u_int8_t *packet);
+void tcp(const u_int8_t *packet, int ip_hdr_len);
 void udp(const u_int8_t *packet);
+
+// helper function to get port name
+char *port_name(u_int16_t port);
 
 #endif // TRACE_H
