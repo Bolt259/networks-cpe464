@@ -218,16 +218,6 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
     u_int16_t tcp_seg_len = ip_total_len - ip_hdr_len;
     const u_int8_t *tcp_start = packet + ETHER_HDR_LEN + ip_hdr_len; // start of TCP segment in memory
 
-    // // ween
-    // printf("\t\tTCP Segment Length: %d\n", tcp_seg_len);
-    // printf("\t\tFirst 32 bytes at TCP start address: ");
-    // for (int i = 0; i < 32 && i < tcp_seg_len; i++)
-    // {
-    //     printf("%02x ", tcp_start[i]);
-    // }
-    // printf("\n");
-    // // ween
-
     // build pseudo header
     struct pseudo_hdr
     {
@@ -239,8 +229,8 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
     };
 
     struct pseudo_hdr pseudo;
-    pseudo.src_ip_addr = ntohl(*(u_int32_t *)(packet + 26));  // 4 bytes of source IP starting at 26
-    pseudo.dest_ip_addr = ntohl(*(u_int32_t *)(packet + 30)); // 4 bytes of destination IP starting at 30
+    pseudo.src_ip_addr = *(u_int32_t *)(packet + 26);  // 4 bytes of source IP starting at 26
+    pseudo.dest_ip_addr = *(u_int32_t *)(packet + 30); // 4 bytes of destination IP starting at 30
     pseudo.zero = 0;
     pseudo.protocol = packet[23];
     pseudo.tcp_len = htons(tcp_seg_len); // 2 bytes of TCP length starting at 16 kept in network byte order for checksum calc
@@ -250,20 +240,14 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
     u_int8_t buff[sizeof(struct pseudo_hdr) + tcp_seg_len];
     memcpy(buff, &pseudo, sizeof(struct pseudo_hdr));                 // copy pseudo header to buff
     memcpy(buff + sizeof(struct pseudo_hdr), tcp_start, tcp_seg_len); // advance buff's ptr by size of pseudo and copy TCP segment to buff
-
+    
     // checksum calcs
     u_int16_t expected = ntohs(*(u_int16_t *)(tcp_start + 16));                              // pull checksum from TCP header
     u_int16_t actual = in_cksum((u_int16_t *)buff, sizeof(struct pseudo_hdr) + tcp_seg_len); // calculate checksum
 
-    // int valid = is_tcp_chksum_valid(packet, ip_hdr_len);
-
     printf("\n\tTCP Header\n");
     printf("\t\tSegment Length: %d\n", tcp_seg_len);
 
-    // char *src_port = port_name(ntohs(*(u_int16_t *)(tcp_start)));
-    // char *dest_port = port_name(ntohs(*(u_int16_t *)(tcp_start + 2)));
-    // printf("\t\tSource Port: %s\n", src_port);
-    // printf("\t\tDest Port: %s\n", dest_port);
     printf("\t\tSource Port:  %s\n", port_name(ntohs(*(u_int16_t *)(tcp_start))));
     printf("\t\tDest Port:  %s\n", port_name(ntohs(*(u_int16_t *)(tcp_start + 2))));
 
@@ -287,8 +271,8 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
 void udp(const u_int8_t *packet)
 {
     printf("\n\tUDP Header\n");
-    printf("\t\tSource Port: %d\n", ntohs(*(u_int16_t *)(packet)));
-    printf("\t\tDest Port: %d\n", ntohs(*(u_int16_t *)(packet + 2)));
+    printf("\t\tSource Port:  %s\n", port_name(ntohs(*(u_int16_t *)(packet))));
+    printf("\t\tDest Port:  %s\n", port_name(ntohs(*(u_int16_t *)(packet + 2))));
 }
 
 // // tcp checksum validation
@@ -340,6 +324,8 @@ char *port_name(u_int16_t port)
         return "Telnet";
     case 25:
         return "SMTP";
+    case 53:
+        return "DNS";
     case 110:
         return "POP3";
     default:
