@@ -160,7 +160,7 @@ void ip(const u_int8_t *packet, int ip_hdr_len)
         "\t\tChecksum: %s (0x%04x)\n",
         (actual == 0) ? "Correct" : "Incorrect", // actual checksum is 0 if valid
         expected);
-    
+
     // printf("\t\tactual: 0x%04x\n", actual);     // REMOVE THIS FOR DEBUGGING!!!
 
     printf(
@@ -215,17 +215,27 @@ void arp(const u_int8_t *packet)
 void tcp(const u_int8_t *packet, int ip_hdr_len)
 {
     u_int16_t ip_total_len = ntohs(*(u_int16_t *)(packet + 16));
-    u_int32_t tcp_len = ip_total_len - ip_hdr_len;
+    u_int16_t tcp_seg_len = ip_total_len - ip_hdr_len;
     const u_int8_t *tcp_start = packet + ETHER_HDR_LEN + ip_hdr_len; // start of TCP segment in memory
+
+    // // ween
+    // printf("\t\tTCP Segment Length: %d\n", tcp_seg_len);
+    // printf("\t\tFirst 32 bytes at TCP start address: ");
+    // for (int i = 0; i < 32 && i < tcp_seg_len; i++)
+    // {
+    //     printf("%02x ", tcp_start[i]);
+    // }
+    // printf("\n");
+    // // ween
 
     // build pseudo header
     struct pseudo_hdr
     {
-        uint32_t src_ip_addr;
-        uint32_t dest_ip_addr;
-        uint8_t zero;
-        uint8_t protocol;
-        uint16_t tcp_len;
+        u_int32_t src_ip_addr;
+        u_int32_t dest_ip_addr;
+        u_int8_t zero;
+        u_int8_t protocol;
+        u_int16_t tcp_len;
     };
 
     struct pseudo_hdr pseudo;
@@ -233,21 +243,22 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
     pseudo.dest_ip_addr = ntohl(*(u_int32_t *)(packet + 30)); // 4 bytes of destination IP starting at 30
     pseudo.zero = 0;
     pseudo.protocol = packet[23];
-    pseudo.tcp_len = *(u_int16_t *)(packet + 16) - ip_hdr_len; // 2 bytes of TCP length starting at 16 kept in network byte order for checksum calc
+    pseudo.tcp_len = htons(tcp_seg_len); // 2 bytes of TCP length starting at 16 kept in network byte order for checksum calc
+    // pseudo.tcp_len = *(u_int16_t *)((packet + 16) - ip_hdr_len); // 2 bytes of TCP length starting at 16 kept in network byte order for checksum calc
 
     // allocate buff on stack: pseudo_hdr (12 bytes) + TCP segment (variable length)
-    uint8_t buff[sizeof(struct pseudo_hdr) + tcp_len];
-    memcpy(buff, &pseudo, sizeof(struct pseudo_hdr));                       // copy pseudo header to buff
-    memcpy(buff + sizeof(struct pseudo_hdr), packet + ip_hdr_len, tcp_len); // copy TCP segment to buff
+    u_int8_t buff[sizeof(struct pseudo_hdr) + tcp_seg_len];
+    memcpy(buff, &pseudo, sizeof(struct pseudo_hdr));                 // copy pseudo header to buff
+    memcpy(buff + sizeof(struct pseudo_hdr), tcp_start, tcp_seg_len); // advance buff's ptr by size of pseudo and copy TCP segment to buff
 
     // checksum calcs
-    u_int16_t expected = ntohs(*(u_int16_t *)(tcp_start + 16));                          // pull checksum from TCP header
-    u_int16_t actual = in_cksum((u_int16_t *)buff, sizeof(struct pseudo_hdr) + tcp_len); // calculate checksum
+    u_int16_t expected = ntohs(*(u_int16_t *)(tcp_start + 16));                              // pull checksum from TCP header
+    u_int16_t actual = in_cksum((u_int16_t *)buff, sizeof(struct pseudo_hdr) + tcp_seg_len); // calculate checksum
 
     // int valid = is_tcp_chksum_valid(packet, ip_hdr_len);
 
     printf("\n\tTCP Header\n");
-    printf("\t\tSegment Length: %d\n", tcp_len);
+    printf("\t\tSegment Length: %d\n", tcp_seg_len);
 
     // char *src_port = port_name(ntohs(*(u_int16_t *)(tcp_start)));
     // char *dest_port = port_name(ntohs(*(u_int16_t *)(tcp_start + 2)));
@@ -269,8 +280,7 @@ void tcp(const u_int8_t *packet, int ip_hdr_len)
     printf(
         "\t\tChecksum: %s (0x%04x)\n",
         (actual == 0) ? "Correct" : "Incorrect",
-        expected
-    );
+        expected);
 }
 
 // udp header
