@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <pcap.h>
+#include <arpa/inet.h>
 
 #define ETHER_TYPE_IP 0x0800
 #define ETHER_TYPE_ARP 0x0806
