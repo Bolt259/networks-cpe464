@@ -57,7 +57,7 @@ void sendToServer(int socketNum)
 	sendLen = readFromStdin(buffer);
 	printf("read: %s string len: %d (including null)\n", buffer, sendLen);
 	
-	sent =  safeSend(socketNum, buffer, sendLen, 0);
+	sent =  sendPDU(socketNum, buffer, sendLen);
 	if (sent < 0)
 	{
 		perror("send call");
@@ -67,7 +67,12 @@ void sendToServer(int socketNum)
 	printf("Socket:%d: Sent, Length: %d msg: %s\n", socketNum, sent, buffer);
 	
 	// just for debugging, recv a message from the server to prove it works.
-	recvBytes = safeRecv(socketNum, buffer, MAXBUF, 0);
+	recvBytes = recvPDU(socketNum, buffer, MAXBUF);
+	if (recvBytes < 0)
+	{
+		perror("recv call");
+		exit(-1);
+	}
 	printf("Socket %d: Byte recv: %d message: %s\n", socketNum, recvBytes, buffer);
 	
 }

@@ -72,6 +72,11 @@ void recvFromClient(int clientSocket)
 		
 		// send it back to client (just to test sending is working... e.g. debugging)
 		messageLen = sendPDU(clientSocket, dataBuffer, messageLen);
+		if (messageLen < 0)
+		{
+			perror("send call");
+			exit(-1);
+		}
 		printf("Message sent on socket %d: %d bytes, text: %s\n", clientSocket, messageLen, dataBuffer);
 	}
 	else
