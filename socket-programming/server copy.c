@@ -68,11 +68,11 @@ void recvFromClient(int clientSocket)
 
 	if (messageLen > 0)
 	{
-		printf("Socket %d: Message received, length: %d Data: %s\n", clientSocket, messageLen, dataBuffer);
+		printf("Message received on socket %d, length: %d Data: %s\n", clientSocket, messageLen, dataBuffer);
 		
 		// send it back to client (just to test sending is working... e.g. debugging)
 		messageLen = safeSend(clientSocket, dataBuffer, messageLen, 0);
-		printf("Socket %d: msg sent: %d bytes, text: %s\n", clientSocket, messageLen, dataBuffer);
+		printf("Message sent on socket %d: %d bytes, text: %s\n", clientSocket, messageLen, dataBuffer);
 	}
 	else
 	{

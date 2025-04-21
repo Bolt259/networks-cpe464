@@ -29,4 +29,8 @@ int tcpClientSetup(char * serverName, char * serverPort, int debugFlag);
 int udpServerSetup(int serverPort);
 int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, int serverPort);
 
+// send and recv
+int sendPDU(int clientSocket, uint8_t * dataBuffer, int lengthOfData);
+int recvPDU(int clientSocket, uint8_t * dataBuffer, int bufferSize);
+
 #endif
