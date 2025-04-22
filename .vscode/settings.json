@@ -1,6 +1,10 @@
 {
     "files.associations": {
         "types.h": "c",
-        "endian.h": "c"
+        "endian.h": "c",
+        "socket.h": "c",
+        "features.h": "c",
+        "polllib.h": "c",
+        "networks.h": "c"
     }
 }

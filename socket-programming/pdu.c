@@ -10,7 +10,10 @@
 #include "networks.h"
 #include "safeUtil.h"
 
-// sends [2-byte length in network byte order] + [dataBuffer of length lengthOfData]
+/*
+sends [2-byte length in network byte order] + [dataBuffer of length lengthOfData]
+returns the number of bytes sent (excluding the 2-byte length header)
+*/
 int sendPDU(int clientSocket, uint8_t * dataBuffer, int lengthOfData)
 {
     // total PDU = 2 byte length + payload
@@ -43,7 +46,12 @@ int sendPDU(int clientSocket, uint8_t * dataBuffer, int lengthOfData)
 }
 
 
-// receives [2-byte length in network byte order] + [dataBuffer of length lengthOfData]
+/*
+receives [2-byte length in network byte order] + [dataBuffer of length lengthOfData]
+returns the number of bytes received (excluding the 2-byte length header)
+returns 0 if the connection is closed
+returns -1 if there is an error
+*/
 int recvPDU(int clientSocket, uint8_t * dataBuffer, int bufferSize)
 {
     uint16_t netLength;
@@ -51,7 +59,12 @@ int recvPDU(int clientSocket, uint8_t * dataBuffer, int bufferSize)
     // receive the first 2 bytes for length
     int bytesReceived = safeRecv(clientSocket, (uint8_t *)&netLength, 2, MSG_WAITALL);
 
-    if (bytesReceived != 2)
+    if (bytesReceived == 0)
+    {
+        // connection closed
+        return 0;
+    }
+    else if (bytesReceived != 2)
     {
         fprintf(stderr, "recvPDU: failed to receive length header, received %d bytes, expected 2\n", bytesReceived);
         return -1;
