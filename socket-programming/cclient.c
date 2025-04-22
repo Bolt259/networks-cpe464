@@ -57,7 +57,7 @@ void sendToServer(int socketNum)
 	sendLen = readFromStdin(buffer);
 	printf("read: %s string len: %d (including null)\n", buffer, sendLen);
 	
-	sent =  sendPDU(socketNum, buffer, sendLen);
+	sent = sendPDU(socketNum, buffer, sendLen);
 	if (sent < 0)
 	{
 		perror("send call");

@@ -60,6 +60,8 @@ int recvPDU(int clientSocket, uint8_t * dataBuffer, int bufferSize)
     // convert to host byte order
     uint16_t length = ntohs(netLength);
 
+    // printf("Header info: netLength = %u, length = %u\n", (unsigned)netLength, (unsigned)length);
+
     // payload length is length - 2
     int payloadLength = length - 2;
 
@@ -73,6 +75,7 @@ int recvPDU(int clientSocket, uint8_t * dataBuffer, int bufferSize)
     bytesReceived = safeRecv(clientSocket, dataBuffer, payloadLength, MSG_WAITALL);
     if (bytesReceived == 0)
     {
+        // printf("recvPDU: connection closed by peer\n");
         return 0; // connection closed
     }
     else if (bytesReceived != payloadLength)

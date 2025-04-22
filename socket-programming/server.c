@@ -41,15 +41,23 @@ int main(int argc, char *argv[])
 	//create the server socket
 	mainServerSocket = tcpServerSetup(portNumber);
 
-	// wait for client to connect
-	clientSocket = tcpAccept(mainServerSocket, DEBUG_FLAG);
+	while (1)
+	{
+		// wait for client to connect
+		clientSocket = tcpAccept(mainServerSocket, DEBUG_FLAG);
 
-	recvFromClient(clientSocket);
+		if (clientSocket < 0) {
+			perror("tcpAccept failed");
+			continue; // try to accept the next client
+		}
+
+		recvFromClient(clientSocket);
+		
+		/* close the sockets */
+		close(clientSocket);
+	}	
 	
-	/* close the sockets */
-	close(clientSocket);
 	close(mainServerSocket);
-
 	
 	return 0;
 }
@@ -59,8 +67,8 @@ void recvFromClient(int clientSocket)
 	uint8_t dataBuffer[MAXBUF];
 	int messageLen = 0;
 	
-	//now get the data from the client_socket
-	if ((messageLen = recvPDU(clientSocket, dataBuffer, MAXBUF) < 0))
+	// now get the data from the client_socket
+	if ((messageLen = recvPDU(clientSocket, dataBuffer, MAXBUF)) < 0)
 	{
 		perror("recv call");
 		exit(-1);
