@@ -94,7 +94,7 @@ void addNewSocket(int serverSocket)
 	}
 
 	addToPollSet(clientSocket); // add the new client socket to the poll set
-	printf("New client added to poll set: %d\n", clientSocket);
+								// printf("New client added to poll set: %d\n", clientSocket);
 }
 
 static void cleanupClient(int clientSocket, const char *msg, const char *syscall)

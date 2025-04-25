@@ -1,6 +1,5 @@
 // Lukas Shipley
 // Adding support for PDU (Protocol Data Unit) in the socket programming library
-//
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,7 +13,7 @@
 sends [2-byte length in network byte order] + [dataBuffer of length lengthOfData]
 returns the number of bytes sent (excluding the 2-byte length header)
 */
-int sendPDU(int clientSocket, uint8_t * dataBuffer, int lengthOfData)
+int sendPDU(int clientSocket, uint8_t *dataBuffer, int lengthOfData)
 {
     // total PDU = 2 byte length + payload
     uint16_t length = lengthOfData + 2;
@@ -27,11 +26,11 @@ int sendPDU(int clientSocket, uint8_t * dataBuffer, int lengthOfData)
         perror("sendPDU: malloc error");
         return -1;
     }
-    
+
     // copy header and payload into buffer
     memcpy(pduBuff, &netLength, 2);
     memcpy(pduBuff + 2, dataBuffer, lengthOfData);
-    
+
     // send the PDU
     int bytesSent = safeSend(clientSocket, pduBuff, length, 0);
     if (bytesSent != length)
@@ -45,14 +44,13 @@ int sendPDU(int clientSocket, uint8_t * dataBuffer, int lengthOfData)
     return (bytesSent - 2);
 }
 
-
 /*
 receives [2-byte length in network byte order] + [dataBuffer of length lengthOfData]
 returns the number of bytes received (excluding the 2-byte length header)
 returns 0 if the connection is closed
 returns -1 if there is an error
 */
-int recvPDU(int clientSocket, uint8_t * dataBuffer, int bufferSize)
+int recvPDU(int clientSocket, uint8_t *dataBuffer, int bufferSize)
 {
     uint16_t netLength;
 
@@ -72,8 +70,6 @@ int recvPDU(int clientSocket, uint8_t * dataBuffer, int bufferSize)
 
     // convert to host byte order
     uint16_t length = ntohs(netLength);
-
-    // printf("Header info: netLength = %u, length = %u\n", (unsigned)netLength, (unsigned)length);
 
     // payload length is length - 2
     int payloadLength = length - 2;

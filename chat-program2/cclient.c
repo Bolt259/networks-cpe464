@@ -42,30 +42,38 @@ void processMsgFromServer(int serverSocket);
 int main(int argc, char *argv[])
 {
 	int socketNum = 0; // socket descriptor
-
+	
 	checkArgs(argc, argv);
-
+	
 	/* set up the TCP Client socket  */
 	socketNum = tcpClientSetup(argv[1], argv[2], DEBUG_FLAG);
-
+	
 	clientControl(socketNum);
-
+	
 	close(socketNum);
-
+	
 	return 0;
 }
 
 void clientControl(int serverSocket)
 {
 	int readySocket = 0;
-
+	int userInputFlag = 1;
+	
 	setupPollSet();
 	addToPollSet(serverSocket);
 	addToPollSet(STDIN_FILENO);
-
+	
 	while (1)
 	{
 		// wait for input from stdin or the server
+		if (userInputFlag)
+		{
+			printf("Enter data: ");
+			fflush(stdout); // Ensure the message is displayed immediately
+			userInputFlag = 0;
+		}
+
 		readySocket = pollCall(POLL_WAIT_FOREVER);
 
 		if (readySocket < 0)
@@ -82,6 +90,7 @@ void clientControl(int serverSocket)
 		else if (readySocket == serverSocket)
 		{
 			processMsgFromServer(serverSocket);
+			userInputFlag = 1;
 		}
 		else
 		{
@@ -145,7 +154,6 @@ int readFromStdin(uint8_t *buffer)
 
 	// Important you don't input more characters than you have space
 	buffer[0] = '\0';
-	printf("Enter data: ");
 	while (inputLen < (MAXBUF - 1) && aChar != '\n')
 	{
 		aChar = getchar();
