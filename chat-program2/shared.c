@@ -32,7 +32,7 @@ int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, char **dest
     // for %M and %C, must add num of destinations
     if (flag == 5 && numDestHandles != 1)
     {
-        fprintf(stderr, "Error: For %M flag, only one destination handle is allowed\n");
+        fprintf(stderr, "Error: For %%M flag, only one destination handle is allowed\n");
         return -1;
     }
 
@@ -41,7 +41,7 @@ int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, char **dest
         // check if numDestHandles is valid
         if (numDestHandles <= 0)
         {
-            fprintf(stderr, "Error: Number of destination handles must be greater than 0 for %M and %C flags\n");
+            fprintf(stderr, "Error: Number of destination handles must be greater than 0 for %%M and %%C flags\n");
             return -1;
         }
         else if (numDestHandles > MAX_DEST_HANDLES)

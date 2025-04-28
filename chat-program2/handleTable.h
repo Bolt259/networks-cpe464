@@ -5,8 +5,8 @@
 #define __HANDLE_TABLE_H__
 
 #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAX_HANDLES 100
 #define MAX_HANDLE_LENGTH 100
