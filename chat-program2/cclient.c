@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
 	
 	checkArgs(argc, argv);
 	
-	/* set up the TCP Client socket  */
+	// set up the TCP Client socket
 	socketNum = tcpClientSetup(argv[1], argv[2], DEBUG_FLAG);
 	
 	clientControl(socketNum);
