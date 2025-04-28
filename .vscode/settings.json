@@ -6,6 +6,9 @@
         "features.h": "c",
         "polllib.h": "c",
         "networks.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "shared.h": "c",
+        "time.h": "c",
+        "string.h": "c"
     }
 }

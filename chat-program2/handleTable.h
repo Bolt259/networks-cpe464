@@ -1,12 +1,12 @@
 // Outlines a handleTable data structure for managing resources in a chat program
 // Lukas Shipley
 
-#ifndef HANDLE_TABLE_H
-#define HANDLE_TABLE_H
+#ifndef __HANDLE_TABLE_H__
+#define __HANDLE_TABLE_H__
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+// #include <stdlib.h>
+// #include <string.h>
 
 #define MAX_HANDLES 100
 #define MAX_HANDLE_LENGTH 100
@@ -32,4 +32,4 @@ int removeHandle(int socket);
 int getHandles(char ***handleList);
 void handleTableCleanup(void);
 
-#endif
+#endif // __HANDLE_TABLE_H__

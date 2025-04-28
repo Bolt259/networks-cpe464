@@ -9,24 +9,11 @@
 Modified by Lukas Shipley
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/uio.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <stdint.h>
-
+#include "shared.h"
 #include "networks.h"
 #include "safeUtil.h"
 #include "pollLib.h"
+#include "handleTable.h"
 
 #define MAXBUF 1024
 #define DEBUG_FLAG 1
@@ -38,15 +25,19 @@ void checkArgs(int argc, char *argv[]);
 void clientControl(int serverSocket);
 void processStdin(int serverSocket);
 void processMsgFromServer(int serverSocket);
+void regHandle(int serverSocket, char *handle);
 
 int main(int argc, char *argv[])
 {
 	int socketNum = 0; // socket descriptor
-	
+
 	checkArgs(argc, argv);
-	
+
 	// set up the TCP Client socket
-	socketNum = tcpClientSetup(argv[1], argv[2], DEBUG_FLAG);
+	socketNum = tcpClientSetup(argv[2], argv[3], DEBUG_FLAG);
+
+	// register the handle with the server
+	regHandle(socketNum, argv[1]);
 	
 	clientControl(socketNum);
 	
@@ -55,22 +46,47 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+void regHandle(int serverSocket, char *handle)
+{
+	// check size of handle
+	if (handle == NULL || strlen(handle) > MAX_HANDLE_LENGTH)
+	{
+		fprintf(stderr, "Error: Client handle length exceeds maximum allowed length or handle is somehow empty\n");
+		exit(-1);
+	}
+	uint8_t buffer[MAXBUF];
+	int handleLen = strlen(handle);
+	
+	buffer[0] = 1;						   // flag for registering handle
+	buffer[1] = handleLen;				   // length of handle
+	memcpy(&buffer[2], handle, handleLen); // copy handle into buffer
+	
+	// send the message to the server
+	int sent = sendPDU(serverSocket, buffer, handleLen + 2);
+	if (sent < 0)
+	{
+		perror("sendPDU call");
+		exit(-1);
+	}
+	printf("Socket %d: Sent registration message: %.*s\n", serverSocket, handleLen, &buffer[2]);
+}
+
 void clientControl(int serverSocket)
 {
 	int readySocket = 0;
 	int userInputFlag = 1;
-	
+
 	setupPollSet();
 	addToPollSet(serverSocket);
 	addToPollSet(STDIN_FILENO);
-	
+
 	while (1)
 	{
 		// wait for input from stdin or the server
 		if (userInputFlag)
 		{
-			printf("Enter data: ");
-			fflush(stdout); // Ensure the message is displayed immediately
+			// printf("Enter data: ");
+			// fflush(stdout); // Ensure the message is displayed immediately
 			userInputFlag = 0;
 		}
 
@@ -110,20 +126,44 @@ void processMsgFromServer(int serverSocket)
 {
 	// this function is called when the server socket is ready for read from client
 	uint8_t buffer[MAXBUF];
-	int recvBytes = 0;
+	int messageLen = recvPDU(serverSocket, buffer, MAXBUF);
 
-	recvBytes = recvPDU(serverSocket, buffer, MAXBUF);
-	if (recvBytes == 0)
+	// length check
+	if (messageLen == 0)
 	{
 		printf("Server has terminated\n");
 		exit(0);
 	}
-	else if (recvBytes < 0)
+	else if (messageLen < 0)
 	{
 		perror("recvPDU call");
 		exit(-1);
 	}
-	printf("Socket %d: Byte recv: %d message: %s\n", serverSocket, recvBytes, buffer);
+
+	// identify the type of message based on the flag
+	u_int8_t flag = buffer[0];
+
+	switch (flag)
+	{
+	case 2:
+	{
+		printf("Server: Handle accepted\n");
+		break;
+	}
+	case 3:
+	{
+		printf("Server: Handle already exists or handle table is full\n");
+		break;
+	}
+	default:
+	{
+		printf("Invalid flag from server\n");
+		exit(-1);
+		break;
+	}
+	}
+
+	// printf("Socket %d: Byte recv: %d message: %s\n", serverSocket, messageLen, buffer);
 }
 
 void processStdin(int socketNum)
@@ -174,9 +214,9 @@ int readFromStdin(uint8_t *buffer)
 void checkArgs(int argc, char *argv[])
 {
 	/* check command line arguments  */
-	if (argc != 3)
+	if (argc != 4)
 	{
-		printf("usage: %s host-name port-number \n", argv[0]);
+		printf("usage: %s handle host-name port-number \n", argv[0]);
 		exit(1);
 	}
 }
