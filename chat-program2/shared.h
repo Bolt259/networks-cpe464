@@ -22,9 +22,14 @@
 
 #include "handleTable.h"
 
+#define MAX_PACKET_SIZE 1024
 #define MAX_MESSAGE_LENGTH 200  // including null
 #define MAX_DEST_HANDLES 9
 
-int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *senderHandle, char **destHandles, int numDestHandles, char *messageText);
+int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, char **destHandles, int numDestHandles, char *messageText);
+int buildErrPacket(u_int8_t *packet, char *missingHandle);
+int buildHandleListReq(u_int8_t *packet);
+
+int parseMsgPacket(u_int8_t *buffer, int bufferLen, char* srcHandle, char **destHandles, int *numDestHandles, char *messageText);
 
 #endif // __SHARED_H__

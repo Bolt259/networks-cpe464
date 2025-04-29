@@ -78,3 +78,30 @@ int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, char **dest
 
     return idx; // returning total length to pass into sendPDU
 }
+
+int buildErrPacket(u_int8_t *packet, char *missingHandle)
+{
+    // check if handle is valid
+    if (missingHandle == NULL || strlen(missingHandle) == 0)
+    {
+        fprintf(stderr, "Error: Missing handle is empty\n");
+        return -1;
+    }
+
+    int idx = 0;
+
+    packet[idx++] = 7; // flag for error packet
+
+    // add missing handle - don't include null terminator
+    uint8_t missingHandleLen = strlen(missingHandle);
+    if (missingHandleLen >= MAX_HANDLE_LENGTH)
+    {
+        fprintf(stderr, "Error: Missing handle length exceeds maximum allowed length\n");
+        return -1;
+    }
+    packet[idx++] = missingHandleLen;
+    memcpy(&packet[idx], missingHandle, missingHandleLen);
+    idx += missingHandleLen;
+
+    return idx; // returning total length to pass into sendPDU
+}

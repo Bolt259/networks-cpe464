@@ -101,12 +101,12 @@ static void cleanupClient(int clientSocket, const char *msg, const char *syscall
 void processClient(int clientSocket)
 {
 	u_int8_t buffer[MAXBUF];
-	int messageLen = recvPDU(clientSocket, buffer, MAXBUF);
+	int packetLen = recvPDU(clientSocket, buffer, MAXBUF);
 
 	// length check
-	if (messageLen <= 0)
+	if (packetLen <= 0)
 	{
-		const char *reason = (messageLen == 0)
+		const char *reason = (packetLen == 0)
 								 ? "Connection closed by client"
 								 : "Error receiving message";
 		cleanupClient(clientSocket, reason, "recv call");
@@ -115,25 +115,24 @@ void processClient(int clientSocket)
 
 	// identify the type of message based on the flag
 	u_int8_t flag = buffer[0];
+	u_int8_t handle_len = buffer[1];
+
+	if (handle_len > MAX_HANDLE_LENGTH)
+	{
+		// invalid handle length
+		printf("Invalid handle length from socket %d\n", clientSocket);
+		cleanupClient(clientSocket, "Invalid handle length", "recv call");
+		return;
+	}
+	char handle[MAX_HANDLE_LENGTH + 1];	// +1 for null terminator
+	memcpy(handle, &buffer[2], handle_len);
+	handle[handle_len] = '\0'; // null terminate just in case
 
 	switch (flag)
 	{
 		case 1:
 		{
 			// clients initial packet to the server registering their handle
-			u_int8_t handle_len = buffer[1];
-
-			if (handle_len > MAX_HANDLE_LENGTH)
-			{
-				// invalid handle length
-				printf("Invalid handle length from socket %d\n", clientSocket);
-				cleanupClient(clientSocket, "Invalid handle length", "recv call");
-				return;
-			}
-
-			char handle[MAX_HANDLE_LENGTH + 1];	// +1 for null terminator
-			memcpy(handle, &buffer[2], handle_len);
-			handle[handle_len] = '\0'; // null terminate just in case
 			printf("Registering handle: %s on socket %d\n", handle, clientSocket);
 
 			// try to add handle
@@ -163,6 +162,42 @@ void processClient(int clientSocket)
 			// client sending broadcast message to server
 			break;
 		}
+		case 5:
+		{
+			// client sending normal message %M
+			int receiverSocket = lookupHandle(handle);
+			// if (receiverSocket < 0)
+			// {
+			// 	cleanupClient(clientSocket, "Receiver handle not found", "lookupHandle");
+			// 	return;
+			// }
+
+			// send error flag 7 back to client if receiver handle not found
+			if (receiverSocket < 0)
+			{
+				u_int8_t packet[MAX_PACKET_SIZE];
+				int packetSize = buildErrPacket(packet, handle);
+				if (packetSize < 0)
+				{
+					fprintf(stderr, "Error building error packet\n");
+					return;
+				}
+				if (sendPDU(clientSocket, packet, packetSize) < 0)
+				{
+					cleanupClient(clientSocket, "Error sending error packet to client", "sendPDU");
+					return;
+				}
+				return;
+			}
+
+			// forward message to receiver
+			if (sendPDU(receiverSocket, buffer, packetLen) < 0)
+			{
+				cleanupClient(clientSocket, "Error sending message to receiver", "sendPDU");
+				return;
+			}
+			break;
+		}
 		default:
 		{
 			printf("Invalid flag from socket %d\n", clientSocket);
@@ -173,15 +208,15 @@ void processClient(int clientSocket)
 
 
 	// PREVIOUS CODE ARTIFACT
-	// printf("Message received on socket %d, length: %d, Data: %s\n", clientSocket, messageLen, buffer);
+	// printf("Message received on socket %d, length: %d, Data: %s\n", clientSocket, packetLen, buffer);
 
-	// messageLen = sendPDU(clientSocket, buffer, messageLen);
-	// if (messageLen < 0)
+	// packetLen = sendPDU(clientSocket, buffer, packetLen);
+	// if (packetLen < 0)
 	// {
 	// 	cleanupClient(clientSocket, "Error sending message", "send call");
 	// 	return;
 	// }
-	// printf("Message sent on socket %d: %d bytes, text: %s\n", clientSocket, messageLen, buffer);
+	// printf("Message sent on socket %d: %d bytes, text: %s\n", clientSocket, packetLen, buffer);
 }
 
 int checkArgs(int argc, char *argv[])

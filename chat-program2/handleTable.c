@@ -7,6 +7,7 @@ HandleNode *head = NULL;
 int handleCount = 0;
 int capacity = 0;
 
+// adds handle to the handle table
 int addHandle(char *handle, int socket)
 {
     if (handleCount >= MAX_HANDLES)
@@ -33,7 +34,6 @@ int addHandle(char *handle, int socket)
         perror("malloc");
         exit(-1);
     }
-    
 
     strcpy(newNode->handle, handle);
     newNode->socket = socket;
@@ -44,6 +44,7 @@ int addHandle(char *handle, int socket)
     return 0;
 }
 
+// returns the socket associated with the handle
 int lookupHandle(char *handle)
 {
     HandleNode *curr = head;
@@ -58,6 +59,7 @@ int lookupHandle(char *handle)
     return -1;  // handle not found
 }
 
+// removes the handle associated with the socket
 int removeHandle(int socket)
 {
     HandleNode *curr = head;
@@ -85,6 +87,7 @@ int removeHandle(int socket)
     return -1;  // handle not found
 }
 
+// returns the number of handles copied into handleList
 int getHandles(char ***handleList)
 {
     HandleNode *curr = head;
@@ -118,6 +121,7 @@ int getHandles(char ***handleList)
     return handleCount;  // return the number of handles copied
 }
 
+// frees all memory associated with the handle table
 void handleTableCleanup(void)
 {
     HandleNode *curr = head;

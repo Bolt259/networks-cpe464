@@ -9,6 +9,8 @@
 Modified by Lukas Shipley
 */
 
+#include <ctype.h> // for tolower()
+
 #include "shared.h"
 #include "networks.h"
 #include "safeUtil.h"
@@ -18,32 +20,116 @@ Modified by Lukas Shipley
 #define MAXBUF 1024
 #define DEBUG_FLAG 1
 
-// void sendToServer(int socketNum);
-int readFromStdin(uint8_t *buffer);
+char clientHandle[MAX_HANDLE_LENGTH + 1]; // global variable for handle
+
+// void sendToServer(int serverSocket);
 void checkArgs(int argc, char *argv[]);
+int parseUserCmd
+(
+	char *input,
+	int flag,
+	char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1],
+	int *numDestHandles,
+	char messageText[MAX_MESSAGE_LENGTH]
+);
+int readFromStdin(uint8_t *buffer);
+void regHandle(int serverSocket, char *handle);
+int getFlag(char cmdType);
 
 void clientControl(int serverSocket);
 void processStdin(int serverSocket);
 void processMsgFromServer(int serverSocket);
-void regHandle(int serverSocket, char *handle);
 
 int main(int argc, char *argv[])
 {
-	int socketNum = 0; // socket descriptor
+	int serverSocket = 0; // socket descriptor
 
 	checkArgs(argc, argv);
 
 	// set up the TCP Client socket
-	socketNum = tcpClientSetup(argv[2], argv[3], DEBUG_FLAG);
+	serverSocket = tcpClientSetup(argv[2], argv[3], DEBUG_FLAG);
 
 	// register the handle with the server
-	regHandle(socketNum, argv[1]);
+	regHandle(serverSocket, argv[1]);
 	
-	clientControl(socketNum);
+	clientControl(serverSocket);
 	
-	close(socketNum);
+	close(serverSocket);
 	
 	return 0;
+}
+
+// parseUserCmd parses the user input and extracts the command type, destination handles, and message text
+int parseUserCmd
+(
+	char *input,
+	int flag,
+	char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1],
+	int *numDestHandles,
+	char messageText[MAX_MESSAGE_LENGTH]
+)
+{
+	char *token = NULL;
+	int handleCnt = 0;
+	char cmdType;
+
+	if (strlen(input) == 0)
+	{
+		return;	// do nothing if input is empty - TEST THIS
+	}
+	if (input == NULL || input[0] != '%')
+	{
+		fprintf(stderr, "Error: Invalid command\n");
+		return -1;
+	}
+	token = strtok(input, " \n");	// tokenize input
+	if (token == NULL)
+	{
+		fprintf(stderr, "Error: Tokenizing input\n");
+		return -1;
+	}
+
+	cmdType = tolower(token[1]); // command is %M, %C, %B, %L, case-insensitive
+	flag = getFlag(cmdType);
+	if (flag < 0)
+	{
+		fprintf(stderr, "Error: Invalid command type\n");
+		return -1;
+	}
+	
+	// parse the rest according to flag
+	if (flag == 5)
+	{
+		// %M destHandle [message]
+		token = strtok(NULL, " \n");	// advance to next token
+		if (token == NULL)
+		{
+			fprintf(stderr, "Error: Missing destination handle\n");
+			return -1;
+		}
+		strcpy(destHandles[0], token);
+		*numDestHandles = 1;
+
+		token = strtok(NULL, "\n");
+		if (strlen(token) > MAX_MESSAGE_LENGTH - 1)
+		{
+			fprintf(stderr, "Error: Message length exceeds maximum allowed length\n");
+			return -1;
+		}
+		else if (token)
+		{
+			strcpy(messageText, token);
+		}
+		else if (token == NULL)
+		{
+			messageText[0] = '\0';	// allow for empty message
+		}
+		else
+		{
+			fprintf(stderr, "Error: Tokenizing message\n");
+			return -1;
+		}
+	}
 }
 
 void regHandle(int serverSocket, char *handle)
@@ -56,6 +142,9 @@ void regHandle(int serverSocket, char *handle)
 	}
 	uint8_t buffer[MAXBUF];
 	int handleLen = strlen(handle);
+
+	// set handle in global variable
+	strcpy(clientHandle, handle);
 	
 	buffer[0] = 1;						   // flag for registering handle
 	buffer[1] = handleLen;				   // length of handle
@@ -74,7 +163,7 @@ void regHandle(int serverSocket, char *handle)
 void clientControl(int serverSocket)
 {
 	int readySocket = 0;
-	int userInputFlag = 1;
+	int userInputFlag = 0;
 
 	setupPollSet();
 	addToPollSet(serverSocket);
@@ -82,14 +171,14 @@ void clientControl(int serverSocket)
 
 	while (1)
 	{
-		// wait for input from stdin or the server
 		if (userInputFlag)
 		{
-			// printf("Enter data: ");
-			// fflush(stdout); // Ensure the message is displayed immediately
+			printf("$: ");	// ba$h prompt
+			fflush(stdout);
 			userInputFlag = 0;
 		}
-
+		
+		// wait for input from stdin or the server
 		readySocket = pollCall(POLL_WAIT_FOREVER);
 
 		if (readySocket < 0)
@@ -145,47 +234,154 @@ void processMsgFromServer(int serverSocket)
 
 	switch (flag)
 	{
-	case 2:
-	{
-		printf("Server: Handle accepted\n");
-		break;
-	}
-	case 3:
-	{
-		printf("Server: Handle already exists or handle table is full\n");
-		break;
-	}
-	default:
-	{
-		printf("Invalid flag from server\n");
-		exit(-1);
-		break;
-	}
+		case 2:
+		{
+			printf("Server: Handle accepted\n");
+			break;
+		}
+		case 3:
+		{
+			printf("Server: Handle already exists or handle table is full\n");
+			break;
+		}
+		case 7:
+		{
+			printf("Server: Destination handle in message/multicast packet does not exist or is not registered with the server\n");
+			break;
+		}
+		default:
+		{
+			printf("Invalid flag from server\n");
+			exit(-1);
+			break;
+		}
 	}
 
 	// printf("Socket %d: Byte recv: %d message: %s\n", serverSocket, messageLen, buffer);
 }
 
-void processStdin(int socketNum)
+void processStdin(int serverSocket)
 {
-	uint8_t buffer[MAXBUF]; // data buffer
-	int sendLen = 0;		// amount of data to send
-	int sent = 0;			// actual amount of data sent/* get the data and send it   */
+	uint8_t userCmd[MAXBUF]; 		// data buffer
+	uint8_t packet[MAX_PACKET_SIZE];
+	int packetLen = 0;
+	int cmdLen = 0;					// amount of data to send
+	int sent = 0;					// actual amount of data sent
 
 	// get the data from stdin
-	sendLen = readFromStdin(buffer);
-	printf("read: %s string len: %d (including null)\n", buffer, sendLen);
+	cmdLen = readFromStdin(userCmd);
+	printf("[debugging] read: %s string len: %d (including null)\n", userCmd, cmdLen);
 
-	// send to server
-	sent = sendPDU(socketNum, buffer, sendLen);
-	if (sent < 0)
+	// parse the user cmd
+	int flag;
+	char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1];
+	int numDestHandles = 0;
+	char messageText[MAX_MESSAGE_LENGTH + 1];
+
+	if (parseUserCmd(userCmd, flag, destHandles, &numDestHandles, messageText) < 0)
 	{
-		perror("sendPDU call");
-		exit(-1);
+		fprintf(stderr, "Error parsing user command (possible invalid format)\n");
+		return;
 	}
 
-	printf("Socket:%d: Sent, Length: %d msg: %s\n", socketNum, sent, buffer);
+	// DEBUGGING ONLY
+	printf("[debug] Command Type: %c\n", flag);
+	printf("[debug] Number of Destination Handles: %d\n", numDestHandles);
+	for (int i = 0; i < numDestHandles; i++)
+	{
+		printf("[debug] Destination Handle %d: %s\n", i + 1, destHandles[i]);
+	}
+	printf("[debug] Message Text: %s\n", messageText);
+	// DEBUGGING ONLY
+	
+	// decision tree for what packet to build and send to server based on flag
+	switch (flag)
+	{
+		case 5:
+		{
+			// build message packet
+			packetLen = buildMsgPacket(packet, flag, clientHandle, destHandles, numDestHandles, messageText);
+			if (sendPDU(serverSocket, packet, packetLen) < 0)
+			{
+				perror("sendPDU call");
+				exit(-1);
+			}
+		}
+		case 6:
+		{
+			// // build multicast packet
+			// packetLen = buildMsgPacket(packet, flag, clientHandle, destHandles, numDestHandles, messageText);
+			// if (sendPDU(serverSocket, packet, packetLen) < 0)
+			// {
+			// 	perror("sendPDU call");
+			// 	exit(-1);
+			// }
+		}
+		case 4:
+		{
+			// // build broadcast packet
+			// packetLen = buildMsgPacket(packet, flag, clientHandle, destHandles, numDestHandles, messageText);
+			// if (sendPDU(serverSocket, packet, packetLen) < 0)
+			// {
+			// 	perror("sendPDU call");
+			// 	exit(-1);
+			// }
+		}
+		case 10:
+		{
+			// // build handle list request packet
+			// packetLen = buildHandleListReq(packet);
+			// if (sendPDU(serverSocket, packet, packetLen) < 0)
+			// {
+			// 	perror("sendPDU call");
+			// 	exit(-1);
+			// }
+		}
+		default:
+		{
+			fprintf(stderr, "Error: Invalid command type\n");
+			return;
+		}
+	}
+			
+
+	// // send to server
+	// sent = sendPDU(serverSocket, buffer, cmdLen);
+	// if (sent < 0)
+	// {
+	// 	perror("sendPDU call");
+	// 	exit(-1);
+	// }
+
+	// printf("Socket:%d: Sent, Length: %d msg: %s\n", serverSocket, sent, buffer);
 }
+
+// returns flag based on command type
+int getFlag(char cmdType)
+{
+	if (cmdType == 'm')
+	{
+		return 5;
+	}
+	else if (cmdType == 'c')
+	{
+		return 6;
+	}
+	else if (cmdType == 'b')
+	{
+		return 4;
+	}
+	else if (cmdType == 'l')
+	{
+		return 10;
+	}
+	else
+	{
+		fprintf(stderr, "Error: Invalid command type\n");
+		return -1;
+	}
+}
+	
 
 int readFromStdin(uint8_t *buffer)
 {
