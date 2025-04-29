@@ -30,6 +30,7 @@ int addHandle(char* handle, int socket);
 int lookupHandle(char* handle);
 int removeHandle(int socket);
 int getHandles(char ***handleList);
+void freeHandleList(char **handleList);
 void handleTableCleanup(void);
 
 #endif // __HANDLE_TABLE_H__

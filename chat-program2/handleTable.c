@@ -121,6 +121,20 @@ int getHandles(char ***handleList)
     return handleCount;  // return the number of handles copied
 }
 
+// frees the handle list
+void freeHandleList(char **handleList)
+{
+    if (handleList == NULL)
+    {
+        return;  // nothing to free
+    }
+    for (int i = 0; i < handleCount; i++)
+    {
+        free(handleList[i]);
+    }
+    free(handleList);
+}
+
 // frees all memory associated with the handle table
 void handleTableCleanup(void)
 {

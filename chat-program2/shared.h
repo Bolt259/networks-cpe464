@@ -28,11 +28,12 @@
 
 void printPacket(uint8_t *packet, int packetLen);
 
-int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1], int numDestHandles, char *messageText);
+int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, int numDestHandles, char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1], char *messageText);
 int buildErrPacket(u_int8_t *packet, char *missingHandle);
-int buildHandleListReq(u_int8_t *packet);
+// int buildBroadcastPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, int *numDestHandles, char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1], char *messageText);
+// int buildHandleListReq(u_int8_t *packet);
 
-int parseMsgPacket(u_int8_t *buffer, int bufferLen, char* srcHandle, char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1], int *numDestHandles, char *messageText);
+int parseMsgPacket(u_int8_t *buffer, int bufferLen, char* srcHandle, int *numDestHandles, char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1], char *messageText);
 uint8_t getHandleFromBuffer(uint8_t *buffer, char handle[MAX_HANDLE_LENGTH + 1], int whichHandle);
 
 #endif // __SHARED_H__

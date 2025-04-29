@@ -22,6 +22,9 @@ Modified by Lukas Shipley
 
 char clientHandle[MAX_HANDLE_LENGTH + 1]; // global variable for handle
 
+int expectingHandleList = 0; // flag for waiting for rest of handles
+int remainingHandles = 0; // number of handles left to be received`
+
 // void sendToServer(int serverSocket);
 void checkArgs(int argc, char *argv[]);
 int parseUserCmd
@@ -73,66 +76,105 @@ int parseUserCmd
 	char *token = NULL;
 	char cmdType;
 
-	if (strlen(input) == 0)
-	{
-		return 0;	// do nothing if input is empty - TEST THIS
-	}
 	if (input == NULL || input[0] != '%')
 	{
-		fprintf(stderr, "Error: Invalid command\n");
+		fprintf(stderr, "Error: Invalid command, missing %% prefix\n");
 		return -1;
 	}
 	token = strtok(input, " \n");	// tokenize input
 	if (token == NULL)
 	{
-		fprintf(stderr, "Error: Tokenizing input\n");
+		fprintf(stderr, "Error: Tokenizing command\n");
 		return -1;
 	}
 
 	cmdType = tolower(token[1]); // command is %M, %C, %B, %L, case-insensitive
 
-	printf("\n[debug]Command type: %c\n", cmdType);
+	printf("\n[debug]Command type: %c\n", cmdType); ////////////////////////////////////////////DEBUG
 
 	*flag = getFlag(cmdType);
-	if ((*flag) < 0)
+	if (*flag == (uint8_t)-1)
 	{
-		fprintf(stderr, "Error: Invalid command type (parseUserCmd)\n");
+		fprintf(stderr, "Error: Invalid command type: '%c' (in parseUserCmd)\n", cmdType);
 		return -1;
 	}
 	
 	// parse the rest according to what is at the int flag pointer
-	if ((*flag) == 5)
+	switch (*flag)
 	{
-		// %M destHandle [message]
-		token = strtok(NULL, " \n");	// advance to next token
-		if (token == NULL)
-		{
-			fprintf(stderr, "Error: Missing destination handle\n");
-			return -1;
-		}
-		strcpy(destHandles[0], token);
-		*numDestHandles = 1;
+		case 4: // %B [message]
+			*numDestHandles = 0;
+			token = strtok(NULL, "\n");
+			if (token == NULL || strlen(token) > MAX_MESSAGE_LENGTH - 1)
+			{
+				fprintf(stderr, "Error: No message provided or message exceeds maximum allowed length\n");
+				return -1;
+			}
+			strcpy(messageText, token ? token : "");
+			break;
 
-		token = strtok(NULL, "\n");
-		if (strlen(token) > MAX_MESSAGE_LENGTH - 1)
-		{
-			fprintf(stderr, "Error: Message length exceeds maximum allowed length\n");
+		case 5: // %M destHandle [message]
+			token = strtok(NULL, " \n"); // advance to next token
+			if (token == NULL)
+			{
+				fprintf(stderr, "Error: Missing destination handle\n");
+				return -1;
+			}
+			strcpy(destHandles[0], token);
+			*numDestHandles = 1;
+
+			token = strtok(NULL, "\n");
+			if (token == NULL || strlen(token) > MAX_MESSAGE_LENGTH - 1)
+			{
+				fprintf(stderr, "Error: No message provided or message exceeds maximum allowed length\n");
+				return -1;
+			}
+			strcpy(messageText, token ? token : "");
+			break;
+			
+		case 6: // %C destHandle1 destHandle2 ... [message]
+			token = strtok(NULL, " \n");
+			if (token == NULL)
+			{
+				fprintf(stderr, "Error: Missing number of destination handles\n");
+				return -1;
+			}
+			*numDestHandles = atoi(token);
+			if (*numDestHandles < 2 || *numDestHandles > MAX_DEST_HANDLES)
+			{
+				fprintf(stderr, "Error: Number of destination handles must be between 2 and %d\n", MAX_DEST_HANDLES);
+				return -1;
+			}
+			for (int i = 0; i < *numDestHandles; i++)
+			{
+				token = strtok(NULL, " \n");
+				if (token == NULL)
+				{
+					fprintf(stderr, "Error: Missing destination handle #%d\n", i + 1);
+					return -1;
+				}
+				strcpy(destHandles[i], token);
+			}
+
+			token = strtok(NULL, "\n");
+			if (token == NULL || strlen(token) > MAX_MESSAGE_LENGTH - 1)
+			{
+				fprintf(stderr, "Error: No message provided or message exceeds maximum allowed length\n");
+				return -1;
+			}
+			strcpy(messageText, token ? token : "");
+			break;
+
+		case 10: // %L
+			*numDestHandles = 0;
+			strcpy(messageText, "");
+			break;
+
+		default:
+			fprintf(stderr, "Error: Entered invalid command type (in parseUserCmd)\n");
 			return -1;
-		}
-		else if (token)
-		{
-			strcpy(messageText, token);
-		}
-		else if (token == NULL)
-		{
-			messageText[0] = '\0';	// allow for empty message
-		}
-		else
-		{
-			fprintf(stderr, "Error: Tokenizing message\n");
-			return -1;
-		}
 	}
+
 	return 0;
 }
 
@@ -174,9 +216,12 @@ void clientControl(int serverSocket)
 
 	while (1)
 	{
-		printf("$: ");	// ba$h prompt
-		fflush(stdout);
-		
+		if (!expectingHandleList)
+		{
+			printf("$: ");	// ba$h prompt
+			fflush(stdout);
+		}
+
 		// wait for input from stdin or the server
 		readySocket = pollCall(POLL_WAIT_FOREVER);
 
@@ -244,9 +289,8 @@ void processMsgFromServer(int serverSocket)
 		}
 		case 4:
 		case 5:
-		case 6:
+		case 6: // message or broadcast or multicast packet
 		{
-			// message or broadcast or multicast packet
 			char srcHandle[MAX_HANDLE_LENGTH + 1];
 			getHandleFromBuffer(buffer, srcHandle, 0);
 
@@ -257,18 +301,64 @@ void processMsgFromServer(int serverSocket)
 			printf("\n%s: %s\n", srcHandle, msgText);
 			break;
 		}
-		case 7:
+		case 7: // error handle not found packet
 		{
-			// error handle not found packet
 			char badHandle[MAX_HANDLE_LENGTH + 1];
-			getHandleFromBuffer(buffer, badHandle, 0);
+			getHandleFromBuffer(buffer, badHandle, 1);
 
 			printf("\nClient with handle %s does not exist\n", badHandle);
 			break;
 		}
+		case 11: // number of clients packet
+		{
+			expectingHandleList = 1;
+			uint32_t netCnt = 0;
+			memcpy(&netCnt, &buffer[1], sizeof(netCnt));
+			uint32_t remainingHandles = ntohl(netCnt);
+			printf("\nNumber of clients: %d\n", remainingHandles);
+			break;
+		}
+		case 12: // handle list packet
+		{
+			if (!expectingHandleList)
+			{
+				fprintf(stderr, "Unexpected handle list packet (flag 12)\n");
+				break;
+			}
+
+			uint8_t handleLen = buffer[1];
+			if (handleLen > MAX_HANDLE_LENGTH)
+			{
+				fprintf(stderr, "Error: Invalid handle length (processMsgFromServer)\n");
+				exit(-1);
+			}
+			char handle[MAX_HANDLE_LENGTH + 1];
+			memcpy(handle, &buffer[2], handleLen);
+			handle[handleLen] = '\0';
+			printf("\t%s\n", handle);
+			remainingHandles--;
+			break;
+		}
+		case 13: // finish
+		{
+			if (!expectingHandleList)
+			{
+				fprintf(stderr, "Unexpected finish packet (flag 13)\n");
+				break;
+			}
+			if (remainingHandles != 0)
+			{
+				fprintf(stderr, "Error: Expected %d handles, but received none\n", remainingHandles);
+				exit(-1);
+			}
+			printf("End of handle list\n"); // DEBUG
+			expectingHandleList = 0;
+			remainingHandles = 0;
+			break;
+		}
 		default:
 		{
-			printf("Invalid flag from server\n");
+			printf("Invalid flag from server %d\n", flag);
 			exit(-1);
 			break;
 		}
@@ -280,10 +370,11 @@ void processStdin(int serverSocket)
 	uint8_t userCmd[MAXBUF]; 		// data buffer
 	uint8_t packet[MAX_PACKET_SIZE];
 	int packetLen = 0;
-	int cmdLen = 0;					// amount of data to send
+	// int cmdLen = 0;					// amount of data to send
 
 	// get the data from stdin
-	cmdLen = readFromStdin(userCmd);
+	// cmdLen = readFromStdin(userCmd);
+	readFromStdin(userCmd);
 	// printf("[debugging] read: |%s| string len: %d (including null)\n", userCmd, cmdLen);
 
 	// parse the user cmd
@@ -314,7 +405,7 @@ void processStdin(int serverSocket)
 		case 5:
 		{
 			// build message packet
-			packetLen = buildMsgPacket(packet, flag, clientHandle, destHandles, numDestHandles, messageText);
+			packetLen = buildMsgPacket(packet, flag, clientHandle, numDestHandles, destHandles, messageText);
 			
 			// DEBUGGING ONLY
 			printPacket(packet, packetLen);
@@ -329,35 +420,35 @@ void processStdin(int serverSocket)
 		}
 		case 6:
 		{
-			// // build multicast packet
-			// packetLen = buildMsgPacket(packet, flag, clientHandle, destHandles, numDestHandles, messageText);
-			// if (sendPDU(serverSocket, packet, packetLen) < 0)
-			// {
-			// 	perror("sendPDU call");
-			// 	exit(-1);
-			// }
+			// build multicast packet
+			packetLen = buildMsgPacket(packet, flag, clientHandle, numDestHandles, destHandles, messageText);
+			if (sendPDU(serverSocket, packet, packetLen) < 0)
+			{
+				perror("sendPDU call");
+				exit(-1);
+			}
 			break;
 		}
 		case 4:
 		{
-			// // build broadcast packet
-			// packetLen = buildMsgPacket(packet, flag, clientHandle, destHandles, numDestHandles, messageText);
-			// if (sendPDU(serverSocket, packet, packetLen) < 0)
-			// {
-			// 	perror("sendPDU call");
-			// 	exit(-1);
-			// }
+			// build broadcast packet
+			packetLen = buildMsgPacket(packet, flag, clientHandle, 0, 0, messageText);
+			if (sendPDU(serverSocket, packet, packetLen) < 0)
+			{
+				perror("sendPDU call");
+				exit(-1);
+			}
 			break;
 		}
 		case 10:
 		{
-			// // build handle list request packet
-			// packetLen = buildHandleListReq(packet);
-			// if (sendPDU(serverSocket, packet, packetLen) < 0)
-			// {
-			// 	perror("sendPDU call");
-			// 	exit(-1);
-			// }
+			// build handle list request packet
+			packet[0] = flag;
+			if (sendPDU(serverSocket, packet, 1) < 0)
+			{
+				perror("sendPDU call");
+				exit(-1);
+			}
 			break;
 		}
 		default:
@@ -367,16 +458,6 @@ void processStdin(int serverSocket)
 		}
 	}
 	return;
-
-	// // send to server
-	// sent = sendPDU(serverSocket, buffer, cmdLen);
-	// if (sent < 0)
-	// {
-	// 	perror("sendPDU call");
-	// 	exit(-1);
-	// }
-
-	// printf("Socket:%d: Sent, Length: %d msg: %s\n", serverSocket, sent, buffer);
 }
 
 // returns the index of the message text in the buffer --> ONLY FOR MESSAGE PACKETS!!

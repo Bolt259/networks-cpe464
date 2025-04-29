@@ -20,6 +20,7 @@ Modified by Lukas Shipley
 
 // void recvFromClient(int clientSocket);
 int checkArgs(int argc, char *argv[]);
+int buildHandleListReq(u_int8_t *packet, char *handle);
 
 void serverControl(int serverSocket);
 void addNewSocket(int serverSocket);
@@ -125,14 +126,14 @@ void processClient(int clientSocket)
 		cleanupClient(clientSocket, "Invalid handle length", "recv call");
 		return;
 	}
-	char handle[MAX_HANDLE_LENGTH + 1];	// +1 for null terminator
-	memcpy(handle, &buffer[2], handle_len);
-	handle[handle_len] = '\0'; // null terminate just in case
+	char srcHandle[MAX_HANDLE_LENGTH + 1];	// +1 for null terminator
+	memcpy(srcHandle, &buffer[2], handle_len);
+	srcHandle[handle_len] = '\0'; // null terminate just in case
 	
 	// DEBUGGINHG ONLY
 	printf("FLAG: %d\n", flag);
 	printf("HANDLE LENGTH: %d\n", handle_len);
-	printf("HANDLE: %s\n", handle);
+	printf("HANDLE: %s\n", srcHandle);
 	// DEBUGGING ONLY
 
 	switch ((int)flag)
@@ -140,10 +141,10 @@ void processClient(int clientSocket)
 		case 1:
 		{
 			// clients initial packet to the server registering their handle
-			printf("Registering handle: %s on socket %d\n", handle, clientSocket);
+			printf("Registering handle: %s on socket %d\n", srcHandle, clientSocket);
 
 			// try to add handle
-			if (addHandle(handle, clientSocket) == 0)
+			if (addHandle(srcHandle, clientSocket) == 0)
 			{
 				// success: send back flag 2
 				u_int8_t replyFlag[1];
@@ -164,23 +165,51 @@ void processClient(int clientSocket)
 			}
 			break;
 		}
-		case 4:
+		case 4:	// broadcast
 		{
-			// client sending broadcast message to server
+			char **handleList = NULL;
+			int totalClients = getHandles(&handleList);
+			if (totalClients < 0)
+			{
+				fprintf(stderr, "Error getting handles from handle table\n");
+				return;
+			}
+
+			for (int i = 0; i < totalClients; i++)
+			{
+				int receiverSocket = lookupHandle(handleList[i]);
+				if (receiverSocket < 0)
+				{
+					fprintf(stderr, "Error looking up handle %s\n", handleList[i]);
+					continue;
+				}
+
+				if (receiverSocket == clientSocket)
+				{
+					continue; // don't send to broadcast sender
+				}
+
+				if (sendPDU(receiverSocket, buffer, packetLen) < 0)
+				{
+					cleanupClient(clientSocket, "Error sending broadcast message", "sendPDU");
+					continue;
+				}
+				printf("Broadcasting message to %s\n", handleList[i]);	// DEBUGGING ONLY
+			}
+
+			freeHandleList(handleList);
 			break;
 		}
-		case 5:
+		case 5:	// message
 		{
-			// client sending normal message %M
-
-			int destHandleLen = getHandleFromBuffer(buffer, handle, 1);
+			int destHandleLen = getHandleFromBuffer(buffer, srcHandle, 1);
 			if (destHandleLen > MAX_HANDLE_LENGTH)
 			{
 				// invalid handle length
-				fprintf(stderr, "Invalid destination handle length from socket in normal message case (processClient) %d\n", clientSocket);
+				fprintf(stderr, "Invalid destination handle length from socket %d in message (processClient)\n", clientSocket);
 				return;
 			}
-			int receiverSocket = lookupHandle(handle);
+			int receiverSocket = lookupHandle(srcHandle);
 			// if (receiverSocket < 0)
 			// {
 			// 	cleanupClient(clientSocket, "Receiver handle not found", "lookupHandle");
@@ -191,7 +220,7 @@ void processClient(int clientSocket)
 			if (receiverSocket < 0)
 			{
 				u_int8_t packet[MAX_PACKET_SIZE];
-				int packetSize = buildErrPacket(packet, handle);
+				int packetSize = buildErrPacket(packet, srcHandle);
 				if (packetSize < 0)
 				{
 					fprintf(stderr, "Error building error packet\n");
@@ -217,6 +246,102 @@ void processClient(int clientSocket)
 			}
 			break;
 		}
+		case 6:	// multicast
+		{
+			uint8_t numDestHandlesIdx = 2 + handle_len;
+			uint8_t numDestHandles = buffer[numDestHandlesIdx];
+			if (numDestHandles > MAX_DEST_HANDLES)
+			{
+				fprintf(stderr, "Invalid number of destination handles from socket %d\n", clientSocket);
+				return;
+			}
+
+			int idx = numDestHandlesIdx + 1; // skip to the first destination handle
+
+			// forward message to each destination handle
+			for (int i = 0; i < numDestHandles; i++)
+			{
+				uint8_t destHandleLen = buffer[idx];
+				char destHandle[MAX_HANDLE_LENGTH + 1];
+
+				if (destHandleLen > MAX_HANDLE_LENGTH)
+				{
+					fprintf(stderr, "Invalid destination handle length from socket %d in multicast (processClient)\n", clientSocket);
+					return;
+				}
+
+				memcpy(destHandle, &buffer[idx + 1], destHandleLen);
+				destHandle[destHandleLen] = '\0'; // null terminate just in case
+				idx += destHandleLen + 1; // skip to the next destination handle
+
+				int receiverSocket = lookupHandle(destHandle);
+				if (receiverSocket < 0)
+				{
+					uint8_t errPacket[MAX_PACKET_SIZE];
+					int errPacketLen = buildErrPacket(errPacket, srcHandle);
+					if (errPacketLen >= 0)
+					{
+						if (sendPDU(clientSocket, errPacket, errPacketLen) < 0)
+						{
+							cleanupClient(clientSocket, "Failed to send error packet", "sendPDU");
+						}
+					}
+					continue; // skip to the next destination handle
+				}
+
+				if (sendPDU(receiverSocket, buffer, packetLen) < 0)
+				{
+					cleanupClient(clientSocket, "Failed to forward multicast message", "sendPDU");
+				}
+			}
+			break;
+		}
+		case 10: // list
+		{
+			char **handleList = NULL;
+			int totalClients = getHandles(&handleList);
+			if (totalClients < 0)
+			{
+				fprintf(stderr, "Error getting handles from handle table\n");
+				return;
+			}
+
+			// FLAG 11: send number of clients (4 bytes in network order)
+			uint8_t ccountPacket[5];
+			ccountPacket[0] = 11;
+			uint32_t numClients = htonl(totalClients);
+			memcpy(&ccountPacket[1], &numClients, sizeof(numClients));
+
+			if (sendPDU(clientSocket, ccountPacket, 5) < 0)
+			{
+				cleanupClient(clientSocket, "Failed to send client count", "sendPDU");
+				freeHandleList(handleList);
+				return;
+			}
+
+			// FLAG 12: send each handle in list
+			for (int i = 0; i < totalClients; i++)
+			{
+				uint8_t handlePacket[MAX_HANDLE_LENGTH + 2];	// +2 for flag and length
+				int handlePacketLen = buildHandleListReq(handlePacket, handleList[i]);
+				if (sendPDU(clientSocket, handlePacket, handlePacketLen) < 0)
+				{
+					cleanupClient(clientSocket, "Failed to send handle (flag 12)", "sendPDU");
+					freeHandleList(handleList);
+					return;
+				}
+			}
+
+			// FLAG 13: finish
+			uint8_t donePacket[1] = {13};
+			if (sendPDU(clientSocket, donePacket, 1) < 0)
+			{
+				cleanupClient(clientSocket, "Failed to send done packet (flag 13)", "sendPDU");
+			}
+			
+			freeHandleList(handleList);
+			break;
+		}
 		default:
 		{
 			printf("Invalid flag from socket %d\n", clientSocket);
@@ -224,18 +349,24 @@ void processClient(int clientSocket)
 			return;
 		}
 	}
+}
 
+int buildHandleListReq(u_int8_t *packet, char *handle)
+{
+	// check handle
+	if (handle == NULL || strlen(handle) == 0)
+	{
+		fprintf(stderr, "Error: Handle is empty\n");
+		return -1;
+	}
 
-	// PREVIOUS CODE ARTIFACT
-	// printf("Message received on socket %d, length: %d, Data: %s\n", clientSocket, packetLen, buffer);
-
-	// packetLen = sendPDU(clientSocket, buffer, packetLen);
-	// if (packetLen < 0)
-	// {
-	// 	cleanupClient(clientSocket, "Error sending message", "send call");
-	// 	return;
-	// }
-	// printf("Message sent on socket %d: %d bytes, text: %s\n", clientSocket, packetLen, buffer);
+	int idx = 0;
+	packet[idx++] = 12;
+	uint8_t handleLen = strlen(handle);
+	packet[1] = handleLen;
+	memcpy(&packet[2], handle, handleLen);
+	idx += handleLen;
+	return idx;
 }
 
 int checkArgs(int argc, char *argv[])
