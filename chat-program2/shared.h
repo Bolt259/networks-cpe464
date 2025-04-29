@@ -26,10 +26,13 @@
 #define MAX_MESSAGE_LENGTH 200  // including null
 #define MAX_DEST_HANDLES 9
 
-int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, char **destHandles, int numDestHandles, char *messageText);
+void printPacket(uint8_t *packet, int packetLen);
+
+int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1], int numDestHandles, char *messageText);
 int buildErrPacket(u_int8_t *packet, char *missingHandle);
 int buildHandleListReq(u_int8_t *packet);
 
-int parseMsgPacket(u_int8_t *buffer, int bufferLen, char* srcHandle, char **destHandles, int *numDestHandles, char *messageText);
+int parseMsgPacket(u_int8_t *buffer, int bufferLen, char* srcHandle, char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1], int *numDestHandles, char *messageText);
+uint8_t getHandleFromBuffer(uint8_t *buffer, char handle[MAX_HANDLE_LENGTH + 1], int whichHandle);
 
 #endif // __SHARED_H__

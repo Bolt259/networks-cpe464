@@ -117,6 +117,7 @@ void processClient(int clientSocket)
 	u_int8_t flag = buffer[0];
 	u_int8_t handle_len = buffer[1];
 
+	
 	if (handle_len > MAX_HANDLE_LENGTH)
 	{
 		// invalid handle length
@@ -127,8 +128,14 @@ void processClient(int clientSocket)
 	char handle[MAX_HANDLE_LENGTH + 1];	// +1 for null terminator
 	memcpy(handle, &buffer[2], handle_len);
 	handle[handle_len] = '\0'; // null terminate just in case
+	
+	// DEBUGGINHG ONLY
+	printf("FLAG: %d\n", flag);
+	printf("HANDLE LENGTH: %d\n", handle_len);
+	printf("HANDLE: %s\n", handle);
+	// DEBUGGING ONLY
 
-	switch (flag)
+	switch ((int)flag)
 	{
 		case 1:
 		{
@@ -165,6 +172,14 @@ void processClient(int clientSocket)
 		case 5:
 		{
 			// client sending normal message %M
+
+			int destHandleLen = getHandleFromBuffer(buffer, handle, 1);
+			if (destHandleLen > MAX_HANDLE_LENGTH)
+			{
+				// invalid handle length
+				fprintf(stderr, "Invalid destination handle length from socket in normal message case (processClient) %d\n", clientSocket);
+				return;
+			}
 			int receiverSocket = lookupHandle(handle);
 			// if (receiverSocket < 0)
 			// {
@@ -189,6 +204,10 @@ void processClient(int clientSocket)
 				}
 				return;
 			}
+
+			// DEBUGGING ONLY
+			printPacket(buffer, packetLen);
+			// DEBUGGING ONLY
 
 			// forward message to receiver
 			if (sendPDU(receiverSocket, buffer, packetLen) < 0)
