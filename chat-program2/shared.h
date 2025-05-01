@@ -26,7 +26,7 @@
 #define MAX_MESSAGE_LENGTH 200  // including null
 #define MAX_DEST_HANDLES 9
 
-void printPacket(uint8_t *packet, int packetLen);
+void printPacket(uint8_t *packet, int packetLen, int regular);
 
 int buildMsgPacket(u_int8_t *packet, u_int8_t flag, char *srcHandle, int numDestHandles, char destHandles[MAX_DEST_HANDLES][MAX_HANDLE_LENGTH + 1], char *messageText);
 int buildErrPacket(u_int8_t *packet, char *missingHandle);

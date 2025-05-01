@@ -38,7 +38,7 @@ int parseUserCmd
 int readFromStdin(uint8_t *buffer);
 void regHandle(int serverSocket, char *handle);
 uint8_t getFlag(char cmdType);
-int getMsgIdx(uint8_t *buffer);
+int getMsgIdx(uint8_t *buffer, int broadcast);
 
 void clientControl(int serverSocket);
 void processStdin(int serverSocket);
@@ -296,7 +296,11 @@ void processMsgFromServer(int serverSocket)
 
 			// int destHandleLen = getHandleFromBuffer(buffer, srcHandle, 1);
 
-			int msgStartIdx = getMsgIdx(buffer);
+			int msgStartIdx;
+
+			if (flag == 4) msgStartIdx = getMsgIdx(buffer, 1);	// broadcast packet
+			else msgStartIdx = getMsgIdx(buffer, 0);
+
 			char *msgText = (char *)&buffer[msgStartIdx];	// >>* CAUTION: message text in packets must be null terminated
 			printf("\n%s: %s\n", srcHandle, msgText);
 			break;
@@ -314,8 +318,10 @@ void processMsgFromServer(int serverSocket)
 			expectingHandleList = 1;
 			uint32_t netCnt = 0;
 			memcpy(&netCnt, &buffer[1], sizeof(netCnt));
-			uint32_t remainingHandles = ntohl(netCnt);
-			printf("\nNumber of clients: %d\n", remainingHandles);
+			uint32_t clientCnt = ntohl(netCnt);
+			printf("\nNumber of clients: %d\n", clientCnt);
+			remainingHandles = (int)clientCnt;
+			printf("[DEBUG] Remaining handles init: %d\n", remainingHandles); // DEBUG
 			break;
 		}
 		case 12: // handle list packet
@@ -332,11 +338,16 @@ void processMsgFromServer(int serverSocket)
 				fprintf(stderr, "Error: Invalid handle length (processMsgFromServer)\n");
 				exit(-1);
 			}
-			char handle[MAX_HANDLE_LENGTH + 1];
-			memcpy(handle, &buffer[2], handleLen);
-			handle[handleLen] = '\0';
-			printf("\t%s\n", handle);
-			remainingHandles--;
+			printf("[DEBUG] handle length: %d\n", handleLen); // DEBUG
+
+			char clientHandle[MAX_HANDLE_LENGTH + 1];
+			memcpy(clientHandle, &buffer[2], handleLen);
+			clientHandle[handleLen] = '\0';
+			printf("  %s\n", clientHandle);
+			printf("[DEBUG] Remaining handles before decrement: %d\n", remainingHandles); // DEBUG
+			remainingHandles = (remainingHandles > 0) ? remainingHandles - 1 : 0;
+			printf("[DEBUG] Remaining handles after decrement: %d\n", remainingHandles);	
+			
 			break;
 		}
 		case 13: // finish
@@ -408,7 +419,7 @@ void processStdin(int serverSocket)
 			packetLen = buildMsgPacket(packet, flag, clientHandle, numDestHandles, destHandles, messageText);
 			
 			// DEBUGGING ONLY
-			printPacket(packet, packetLen);
+			printPacket(packet, packetLen, 1);
 			// DEBUGGING ONLY
 
 			if (sendPDU(serverSocket, packet, packetLen) < 0)
@@ -461,11 +472,14 @@ void processStdin(int serverSocket)
 }
 
 // returns the index of the message text in the buffer --> ONLY FOR MESSAGE PACKETS!!
-int getMsgIdx(uint8_t *buffer)
+int getMsgIdx(uint8_t *buffer, int broadcast)
 {
 	int idx = 0;
 	uint8_t srcHandleLen = buffer[1];
 	idx += 2 + srcHandleLen;	// skip over flag and src handle
+
+	if (broadcast) return idx;	// broadcast packet no dest handles
+
 	uint8_t numDestHandles = buffer[idx];
 	idx += 1;
 

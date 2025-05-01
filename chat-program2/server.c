@@ -20,7 +20,7 @@ Modified by Lukas Shipley
 
 // void recvFromClient(int clientSocket);
 int checkArgs(int argc, char *argv[]);
-int buildHandleListReq(u_int8_t *packet, char *handle);
+int buildHandleListReq(u_int8_t packet[MAX_HANDLE_LENGTH + 2], char *handle);
 
 void serverControl(int serverSocket);
 void addNewSocket(int serverSocket);
@@ -133,7 +133,7 @@ void processClient(int clientSocket)
 	// DEBUGGINHG ONLY
 	printf("FLAG: %d\n", flag);
 	printf("HANDLE LENGTH: %d\n", handle_len);
-	printf("HANDLE: %s\n", srcHandle);
+	printf("SRC_HANDLE: %s\n", srcHandle);
 	// DEBUGGING ONLY
 
 	switch ((int)flag)
@@ -235,7 +235,7 @@ void processClient(int clientSocket)
 			}
 
 			// DEBUGGING ONLY
-			printPacket(buffer, packetLen);
+			printPacket(buffer, packetLen, 1);
 			// DEBUGGING ONLY
 
 			// forward message to receiver
@@ -310,6 +310,7 @@ void processClient(int clientSocket)
 			uint8_t ccountPacket[5];
 			ccountPacket[0] = 11;
 			uint32_t numClients = htonl(totalClients);
+			printf("[DEBUG] Number of clients: %d\n", totalClients);	// DEBUGGING ONLY
 			memcpy(&ccountPacket[1], &numClients, sizeof(numClients));
 
 			if (sendPDU(clientSocket, ccountPacket, 5) < 0)
@@ -324,6 +325,9 @@ void processClient(int clientSocket)
 			{
 				uint8_t handlePacket[MAX_HANDLE_LENGTH + 2];	// +2 for flag and length
 				int handlePacketLen = buildHandleListReq(handlePacket, handleList[i]);
+
+				printPacket(handlePacket, handlePacketLen, 0);	// DEBUGGING ONLY
+
 				if (sendPDU(clientSocket, handlePacket, handlePacketLen) < 0)
 				{
 					cleanupClient(clientSocket, "Failed to send handle (flag 12)", "sendPDU");
@@ -338,7 +342,7 @@ void processClient(int clientSocket)
 			{
 				cleanupClient(clientSocket, "Failed to send done packet (flag 13)", "sendPDU");
 			}
-			
+
 			freeHandleList(handleList);
 			break;
 		}
@@ -351,12 +355,12 @@ void processClient(int clientSocket)
 	}
 }
 
-int buildHandleListReq(u_int8_t *packet, char *handle)
+int buildHandleListReq(u_int8_t packet[MAX_HANDLE_LENGTH + 2], char *handle)
 {
 	// check handle
 	if (handle == NULL || strlen(handle) == 0)
 	{
-		fprintf(stderr, "Error: Handle is empty\n");
+		fprintf(stderr, "Error: Handle is empty (buildHandleListReq)\n");
 		return -1;
 	}
 

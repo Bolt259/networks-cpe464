@@ -3,7 +3,7 @@
 
 #include "shared.h"
 
-void printPacket(uint8_t *packet, int packetLen)
+void printPacket(uint8_t *packet, int packetLen, int regular)
 {
     int idx = 0;
 
@@ -49,10 +49,13 @@ void printPacket(uint8_t *packet, int packetLen)
     printf("Flag: %d\n", flag);
     printf("Sender Handle Length: %d\n", senderHandleLen);
     printf("Sender Handle: %s\n", senderHandle);
-    printf("Number of Destination Handles: %d\n", numDestHandles);
-    printf("Destination Handle Length: %d\n", destHandleLen);
-    printf("Destination Handle: %s\n", destHandle);
-    printf("Message Text: %s\n", messageText);
+    if (regular)
+    {
+        printf("Number of Destination Handles: %d\n", numDestHandles);
+        printf("Destination Handle Length: %d\n", destHandleLen);
+        printf("Destination Handle: %s\n", destHandle);
+        printf("Message Text: %s\n", messageText);
+    }
 }
 
 // returns the length of the handle copied into handle from buffer[2] the location of src handle in msg packets
