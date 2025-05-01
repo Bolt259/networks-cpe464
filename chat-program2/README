@@ -1,2 +1,8 @@
 Lukas Shipley
 Lab Time: 12pm noon section
+
+Has 1 known error with list (%L) where it will return everything but the last
+character of the handle in all handle list elements, I've tested everything
+around packing up and pulliing from the buffers right before and right after
+sendPDU and recvPDU around where flags 12 (client) and 10 (server) are handled
+for the life of me I don't know why just the last character is not copied over

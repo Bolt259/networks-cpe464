@@ -19,7 +19,7 @@
 #include "networks.h"
 #include "gethostbyname.h"
 
-
+#define DEBUG_FLAG 0
 
 // This function sets the server socket. The function returns the server
 // socket number and prints the port number to the screen.  
@@ -65,8 +65,13 @@ int tcpServerSetup(int serverPort)
 		exit(-1);
 	}
 	
-	printf("Server Port Number %d \n", ntohs(serverAddress.sin6_port));
+	if (DEBUG_FLAG)
+	{
+		printf("Server Port Number %d \n", ntohs(serverAddress.sin6_port));
+	}
 	
+	printf("Server is using port: %d\n", ntohs(serverAddress.sin6_port));
+
 	return mainServerSocket;
 }
 
@@ -84,9 +89,12 @@ int tcpAccept(int mainServerSocket, int debugFlag)
 		perror("accept call");
 		exit(-1);
 	}
-	  
-	printf("Client accepted. Socket: %d,  Client IP: %s Client Port Number: %d\n",  
+
+	if (debugFlag)
+	{
+		printf("Client accepted. Socket: %d,  Client IP: %s Client Port Number: %d\n",  
 			client_socket, getIPAddressString6(clientAddress.sin6_addr.s6_addr), ntohs(clientAddress.sin6_port));
+	}
 
 	return(client_socket);
 }
@@ -126,9 +134,12 @@ int tcpClientSetup(char * serverName, char * serverPort, int debugFlag)
 		exit(-1);
 	}
 
-	printf("Connected to %s via socket: %d IP: %s Port Number: %d\n", 
+	if (debugFlag)
+	{
+		printf("Connected to %s via socket: %d IP: %s Port Number: %d\n", 
 			serverName, socket_num, getIPAddressString6(ipAddress), atoi(serverPort));
-		
+	}
+	
 	return socket_num;
 }
 
