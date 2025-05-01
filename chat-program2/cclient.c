@@ -339,8 +339,9 @@ void processMsgFromServer(int serverSocket)
 				exit(-1);
 			}
 			printf("[DEBUG] handle length: %d\n", handleLen); // DEBUG
+			printf("[DEBUG] Client handle: %.*s\n", handleLen, &buffer[2]); // DEBUG
 
-			char clientHandle[MAX_HANDLE_LENGTH + 1];
+			char clientHandle[MAX_HANDLE_LENGTH + 1] = {0};
 			memcpy(clientHandle, &buffer[2], handleLen);
 			clientHandle[handleLen] = '\0';
 			printf("  %s\n", clientHandle);
