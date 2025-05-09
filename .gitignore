@@ -54,3 +54,6 @@ dkms.conf
 # Chat - P2
 cclient
 server
+
+# Misc
+*.tar
