@@ -23,17 +23,24 @@
 
 void talkToServer(int socketNum, struct sockaddr_in6 * server);
 int readFromStdin(char * buffer);
-int checkArgs(int argc, char * argv[]);
+int checkArgs(int argc, char *argv[], int *errorRate, int *portNumber);
 
 
 int main (int argc, char *argv[])
  {
-	int socketNum = 0;				
+	int socketNum = 0;
+	int inputStatus = 0;				
 	struct sockaddr_in6 server;		// Supports 4 and 6 but requires IPv6 struct
 	int portNumber = 0;
-	
-	portNumber = checkArgs(argc, argv);
-	
+	int errorRate = 0;
+
+	inputStatus = checkArgs(argc, argv, &errorRate, &portNumber);
+	if (inputStatus == -1)
+	{
+		fprintf(stderr, "Error in command line arguments\n");
+		exit(-1);
+	}
+
 	socketNum = setupUdpClientToServer(&server, argv[1], portNumber);
 	
 	talkToServer(socketNum, &server);
@@ -93,21 +100,28 @@ int readFromStdin(char * buffer)
 	return inputLen;
 }
 
-int checkArgs(int argc, char * argv[])
+int checkArgs(int argc, char *argv[], int *errorRate, int *portNumber)
 {
+	int status = 0;
+	*portNumber = 0;
+	*errorRate = 0;
 
-        int portNumber = 0;
-	
-        /* check command line arguments  */
-	if (argc != 3)
+    /* check command line arguments  */
+	if (argc != 4)
 	{
-		printf("usage: %s host-name port-number \n", argv[0]);
+		printf("usage: %s error-rate host-name port-number \n", argv[0]);
 		exit(1);
 	}
-	
-	portNumber = atoi(argv[2]);
-		
-	return portNumber;
+
+	*portNumber = atoi(argv[3]);
+	*errorRate = atof(argv[1]);
+	if (*errorRate < 0 || *errorRate >= 1)
+	{
+		fprintf(stderr, "Error rate must be between 0 and less than 1\n");
+		exit(-1);
+	}
+
+	return status;
 }
 
 

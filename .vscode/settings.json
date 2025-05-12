@@ -10,6 +10,7 @@
         "shared.h": "c",
         "time.h": "c",
         "string.h": "c",
-        "fcntl.h": "c"
+        "fcntl.h": "c",
+        "checksum.h": "c"
     }
 }
