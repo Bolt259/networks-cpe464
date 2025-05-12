@@ -13,6 +13,7 @@
 #include "gethostbyname.h"
 #include "networks.h"
 #include "safeUtil.h"
+#include "pdu.h"
 
 #define MAXBUF 80
 

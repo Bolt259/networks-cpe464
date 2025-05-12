@@ -18,6 +18,8 @@
 #include "gethostbyname.h"
 #include "networks.h"
 #include "safeUtil.h"
+#include "pdu.h"
+#include "cpe464.h"
 
 #define MAXBUF 80
 
@@ -42,6 +44,8 @@ int main (int argc, char *argv[])
 	}
 
 	socketNum = setupUdpClientToServer(&server, argv[1], portNumber);
+
+	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
 	
 	talkToServer(socketNum, &server);
 	
