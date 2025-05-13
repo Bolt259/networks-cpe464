@@ -40,7 +40,10 @@ int createPDU(uint8_t * pduBuffer, uint32_t sequenceNumber, uint8_t flag, uint8_
     currentPos += payloadLen;
     pduLength += payloadLen;
     
-    netChksum = htons((uint16_t)in_cksum((unsigned short *)pduBuffer, pduLength));
+    // printf("Debug: Checksum before network byte order conversion: %u (0x%04X)\n", (uint16_t)in_cksum((unsigned short *)pduBuffer, pduLength), (uint16_t)in_cksum((unsigned short *)pduBuffer, pduLength));
+    // printf("Debug: Checksum after network byte order conversion: %u (0x%04X)\n", htons((uint16_t)in_cksum((unsigned short *)pduBuffer, pduLength)), htons((uint16_t)in_cksum((unsigned short *)pduBuffer, pduLength)));
+
+    netChksum = (uint16_t)in_cksum((unsigned short *)pduBuffer, pduLength);
     memcpy(pduBuffer + sizeof(netSeqNum), &netChksum, sizeof(netChksum));
 
     return pduLength;
@@ -66,7 +69,7 @@ void printPDU(uint8_t * pduBuffer, int pduLen)
     currentPos += sizeof(chksum);
 
     uint16_t calculatedChksum = in_cksum((unsigned short *)pduBuffer, pduLen);
-    if (chksum != calculatedChksum)
+    if (calculatedChksum != 0)
     {
         fprintf(stderr, "PDU is corrupted. Checksum mismatch: expected %u, got %u\n", calculatedChksum, chksum);
         return;

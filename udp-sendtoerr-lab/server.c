@@ -14,18 +14,19 @@
 #include "networks.h"
 #include "safeUtil.h"
 #include "pdu.h"
+#include "cpe464.h"
 
 #define MAXBUF 80
 
 void processClient(int socketNum);
-int checkArgs(int argc, char *argv[], int *errorRate, int *portNumber);
+int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber);
 
 int main ( int argc, char *argv[]  )
 { 
 	int socketNum = 0;				
 	int inputStatus = 0;
 	int portNumber = 0;
-	int errorRate = 0;
+	float errorRate = 0;
 
 	inputStatus = checkArgs(argc, argv, &errorRate, &portNumber);
 	if (inputStatus == -1)
@@ -36,6 +37,8 @@ int main ( int argc, char *argv[]  )
 
 	socketNum = udpServerSetup(portNumber);
 
+	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
+
 	processClient(socketNum);
 
 	close(socketNum);
@@ -45,29 +48,30 @@ int main ( int argc, char *argv[]  )
 
 void processClient(int socketNum)
 {
-	int dataLen = 0; 
-	char buffer[MAXBUF + 1];	  
+	char pduBuffer[MAX_UDP];	  
 	struct sockaddr_in6 client;		
 	int clientAddrLen = sizeof(client);	
 	
-	buffer[0] = '\0';
-	while (buffer[0] != '.')
+	while (1)
 	{
-		dataLen = safeRecvfrom(socketNum, buffer, MAXBUF, 0, (struct sockaddr *) &client, &clientAddrLen);
-	
-		printf("Received message from client with ");
+		int recvLen = safeRecvfrom(socketNum, pduBuffer, sizeof(pduBuffer), 0, (struct sockaddr *)&client, &clientAddrLen);
+		if (recvLen <= 0)
+		{
+			fprintf(stderr, "Error receiving data\n");
+			exit(-1);
+		}
+
+		printf("Server recieved PDU from client:\n");
 		printIPInfo(&client);
-		printf(" Len: %d \'%s\'\n", dataLen, buffer);
+		printPDU((uint8_t *)pduBuffer, recvLen);
 
 		// just for fun send back to client number of bytes received
-		sprintf(buffer, "bytes: %d", dataLen);
-		safeSendto(socketNum, buffer, strlen(buffer)+1, 0, (struct sockaddr *) & client, clientAddrLen);
-
+		safeSendto(socketNum, pduBuffer, recvLen, 0, (struct sockaddr *)&client, clientAddrLen);
 	}
 }
 
 // usage: server [error rate] [port number]
-int checkArgs(int argc, char *argv[], int *errorRate, int *portNumber)
+int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 {
 	// Checks args and returns port number
 	int status = 0;

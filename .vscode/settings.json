@@ -12,6 +12,7 @@
         "string.h": "c",
         "fcntl.h": "c",
         "checksum.h": "c",
-        "gethostbyname.h": "c"
+        "gethostbyname.h": "c",
+        "inet.h": "c"
     }
 }

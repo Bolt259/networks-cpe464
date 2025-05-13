@@ -56,25 +56,59 @@ int main (int argc, char *argv[])
 void talkToServer(int socketNum, struct sockaddr_in6 * server)
 {
 	int serverAddrLen = sizeof(struct sockaddr_in6);
-	char * ipString = NULL;
-	int dataLen = 0; 
-	char buffer[MAXBUF+1];
+	char input[MAXBUF+1];
+	uint8_t pduBuffer[MAX_UDP];
+	uint8_t recvBuffer[MAX_UDP];
+	uint32_t seqNum = 0;
 	
-	buffer[0] = '\0';
-	while (buffer[0] != '.')
+	while(1)
 	{
-		dataLen = readFromStdin(buffer);
+		int inputLen = readFromStdin(input);
+		if (inputLen > MAXBUF)
+		{
+			fprintf(stderr, "Error: input too long\n");
+			exit(-1);
+		}
+		if (input[0] == '.') break;
 
-		printf("Sending: %s with len: %d\n", buffer,dataLen);
-	
-		safeSendto(socketNum, buffer, dataLen, 0, (struct sockaddr *) server, serverAddrLen);
-		
-		safeRecvfrom(socketNum, buffer, MAXBUF, 0, (struct sockaddr *) server, &serverAddrLen);
-		
-		// print out bytes received
-		ipString = ipAddressToString(server);
-		printf("Server with ip: %s and port %d said it received %s\n", ipString, ntohs(server->sin6_port), buffer);
-	      
+		// build PDU
+		int pduLen = createPDU(pduBuffer, seqNum, 0xAB, (uint8_t *)input, inputLen);
+
+		// printf("Debug PDU Buffer (raw bytes): [");	// DXXG ----------------------^-
+		// for (int i = 0; i < pduLen; i++) {
+		// 	printf("%02X ", pduBuffer[i]);
+		// }
+		// printf("]\n");
+		// uint16_t calculatedChksum = in_cksum((unsigned short *)pduBuffer, pduLen);
+		// if (calculatedChksum != 0)
+		// {
+		// 	fprintf(stderr, "createPDU - error in PDU creation: expected chksum %u\n", calculatedChksum);
+		// 	return;
+		// }
+
+		if (pduLen < 0)
+		{
+			fprintf(stderr, "Error creating PDU\n");
+			exit(-1);
+		}
+
+		printf("Client sending PDU to server:\n");
+		printPDU(pduBuffer, pduLen);
+
+		// send PDU
+		safeSendto(socketNum, pduBuffer, pduLen, 0, (struct sockaddr *) server, serverAddrLen);
+
+		// recv echoed PDU
+		int recvLen = safeRecvfrom(socketNum, recvBuffer, sizeof(recvBuffer), 0, (struct sockaddr *) server, &serverAddrLen);
+		if (recvLen < 0)
+		{
+			fprintf(stderr, "Error receiving PDU\n");
+			exit(-1);
+		}
+		printf("Client received PDU from server:\n");
+		printPDU(recvBuffer, recvLen);
+
+		seqNum++;
 	}
 }
 

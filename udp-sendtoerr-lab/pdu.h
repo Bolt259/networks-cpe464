@@ -11,6 +11,7 @@
 
 #include "cpe464.h"
 
+#define MAX_UDP 1500
 #define MAX_PAYLOAD_LEN 1400
 #define PDU_HEADER_LEN 6 // 4 bytes for sequence number, 2 bytes for checksum, 1 byte for flag
 

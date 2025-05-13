@@ -31,9 +31,9 @@ int safeRecvfrom(int socketNum, void * buf, int len, int flags, struct sockaddr 
 int safeSendto(int socketNum, void * buf, int len, int flags, struct sockaddr *srcAddr, int addrLen)
 {
 	int returnValue = 0;
-	if ((returnValue = sendto(socketNum, buf, (size_t) len, flags, srcAddr, (socklen_t) addrLen)) < 0)
+	if ((returnValue = sendtoErr(socketNum, buf, (size_t) len, flags, srcAddr, (socklen_t) addrLen)) < 0)	// changed to sendtoErr
 	{
-		perror("sendto: ");
+		perror("sendtoErr: ");
 		exit(-1);
 	}
 	
