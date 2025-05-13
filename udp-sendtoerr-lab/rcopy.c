@@ -25,8 +25,7 @@
 
 void talkToServer(int socketNum, struct sockaddr_in6 * server);
 int readFromStdin(char * buffer);
-int checkArgs(int argc, char *argv[], int *errorRate, int *portNumber);
-
+int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber);
 
 int main (int argc, char *argv[])
  {
@@ -34,7 +33,7 @@ int main (int argc, char *argv[])
 	int inputStatus = 0;				
 	struct sockaddr_in6 server;		// Supports 4 and 6 but requires IPv6 struct
 	int portNumber = 0;
-	int errorRate = 0;
+	float errorRate = 0;
 
 	inputStatus = checkArgs(argc, argv, &errorRate, &portNumber);
 	if (inputStatus == -1)
@@ -43,7 +42,7 @@ int main (int argc, char *argv[])
 		exit(-1);
 	}
 
-	socketNum = setupUdpClientToServer(&server, argv[1], portNumber);
+	socketNum = setupUdpClientToServer(&server, argv[2], portNumber);
 
 	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
 	
@@ -104,7 +103,7 @@ int readFromStdin(char * buffer)
 	return inputLen;
 }
 
-int checkArgs(int argc, char *argv[], int *errorRate, int *portNumber)
+int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 {
 	int status = 0;
 	*portNumber = 0;
