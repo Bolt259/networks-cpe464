@@ -13,6 +13,7 @@
         "fcntl.h": "c",
         "checksum.h": "c",
         "gethostbyname.h": "c",
-        "inet.h": "c"
+        "inet.h": "c",
+        "stdlib.h": "c"
     }
 }
