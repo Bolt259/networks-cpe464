@@ -23,6 +23,7 @@
 #include "cpe464.h"
 
 #define MAX_PACK_LEN 1500
+#define MAX_BUFF_SIZE 1400
 
 typedef enum State STATE;
 
@@ -82,6 +83,8 @@ void transferFile(char * argv[])
             case FILE_OK:
                 state = file_ok(&outFileFd, argv[2]);
                 break;
+            case DONE:
+                break;
             default:
                 fprintf(stderr, "ERROR - In default state (transferFile)\n");
                 exit(-1);
@@ -94,7 +97,7 @@ STATE start_state(char ** argv, Connection * server, uint32_t * clientSeqNum)
     uint8_t packet[MAX_PACK_LEN];
     uint8_t buffer[MAX_PACK_LEN];
     int fileNameLen = strlen(argv[1]);
-    STATE state = FILENAME;
+    STATE retVal = FILENAME;
     uint32_t bufferLen = 0;
 
     // if previous server connection, close before reconnect
@@ -103,8 +106,28 @@ STATE start_state(char ** argv, Connection * server, uint32_t * clientSeqNum)
         close(server->socketNum);
     }
 
-    if ()
-    
+    if (setupUdpClientToServer(&server->remote, argv[2], atoi(argv[3])) < 0)
+    {
+        // could not connect to server
+        retVal = DONE;
+    }
+    else
+    {
+        // build PDU (filename packet flag = 9)
+        bufferLen = htonl(atoi(argv[4]));
+        memcpy(buffer, &bufferLen, MAX_BUFF_SIZE);
+        memcpy(&buffer[MAX_BUFF_SIZE], argv[1], fileNameLen);
+        printIPv6Info(&server->remote);
+        // send buffer to server
+        sendtoErr(server->socketNum, buffer, MAX_BUFF_SIZE + fileNameLen, 0,
+                   (struct sockaddr *)&server->remote, sizeof(server->remote));
+// CHECK THIS ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        (* clientSeqNum)++;
+
+    }
+
+    return retVal;
+}
 
 void checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 {
