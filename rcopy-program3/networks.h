@@ -18,6 +18,13 @@
 
 #define LISTEN_BACKLOG 10
 
+typedef struct connection
+{
+    int32_t socketNum;			// socket number
+    struct sockaddr_in6 remote;	// address of the connection
+    uint32_t addrLen;		// length of the address
+} Connection;
+
 // for the TCP server side
 int tcpServerSetup(int serverPort);
 int tcpAccept(int mainServerSocket, int debugFlag);
