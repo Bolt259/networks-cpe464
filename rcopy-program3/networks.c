@@ -209,4 +209,36 @@ int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, 
 	return socketNum;
 }
 
+int selectCall(int32_t sockNum, int32_t sec, int32_t usec)
+{
+	// uses select to wait for socket to be ready
+	fd_set fd_var;
+	struct timeval aTimeout;
+	struct timeval * timeout = NULL;
 
+	// if either time is -1 then block
+	if (sec != -1 && usec != -1)
+	{
+		aTimeout.tv_sec = sec;
+		aTimeout.tv_usec = usec;
+		timeout = &aTimeout;
+	}
+
+	FD_ZERO(&fd_var);
+	FD_SET(sockNum, &fd_var);
+
+	if (select(sockNum + 1, &fd_var, NULL, NULL, timeout) < 0)
+	{
+		perror("select call");
+		exit(-1);
+	}
+
+	if (FD_ISSET(sockNum, &fd_var))
+	{
+		return 1; // socket is ready
+	}
+	else
+	{
+		return 0; // socket is not ready
+	}
+}

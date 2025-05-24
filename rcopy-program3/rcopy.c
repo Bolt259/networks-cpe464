@@ -29,7 +29,13 @@ typedef enum State STATE;
 
 enum State
 {
-	START, FILE_OK, FILENAME, RECV_DATA, DONE
+	START, FILENAME, FILE_OK, RECV_DATA, DONE
+};
+
+enum FLAG
+{
+    FNAME=7, DATA=3, FNAME_OK=8, FNAME_BAD=9, ACK=5,
+    END_OF_FILE=10, EOF_ACK=11, CRC_ERROR=-1
 };
 
 void transferFile(char * argv[]);
@@ -77,11 +83,11 @@ void transferFile(char * argv[])
             case FILENAME:
                 state = filename(argv[1], atoi(argv[4]), server);
                 break;
-            case RECV_DATA:
-                state = recv_data(outFileFd, server, &clientSeqNum);
-                break;
             case FILE_OK:
                 state = file_ok(&outFileFd, argv[2]);
+                break;
+            case RECV_DATA:
+                state = recv_data(outFileFd, server, &clientSeqNum);
                 break;
             case DONE:
                 break;
@@ -118,16 +124,28 @@ STATE start_state(char ** argv, Connection * server, uint32_t * clientSeqNum)
         memcpy(buffer, &bufferLen, MAX_BUFF_SIZE);
         memcpy(&buffer[MAX_BUFF_SIZE], argv[1], fileNameLen);
         printIPv6Info(&server->remote);
-        // send buffer to server
-        sendtoErr(server->socketNum, buffer, MAX_BUFF_SIZE + fileNameLen, 0,
+        // send packet to server with filename
+        createPDU(packet, *clientSeqNum, FNAME, buffer, MAX_BUFF_SIZE + fileNameLen);
+        sendtoErr(server->socketNum, packet, MAX_BUFF_SIZE + fileNameLen, 0,
                    (struct sockaddr *)&server->remote, sizeof(server->remote));
-// CHECK THIS ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         (* clientSeqNum)++;
-
     }
 
     return retVal;
 }
+
+STATE filename(char * fname, int32_t buf_size, Connection * server)
+{
+    // get server response
+    // returns START if no reply, DONE if bad filename, FILE_OK otherwise
+    int retVal = START;
+    uint8_t packet[MAX_PACK_LEN];
+    uint8_t flag = 0;
+    uint32_t seqNum = 0;
+    int32_t recvCheck = 0;
+    static int retryCnt = 0;
+
+    if ((retVal))
 
 void checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 {

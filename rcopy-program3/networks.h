@@ -35,5 +35,6 @@ int tcpClientSetup(char * serverName, char * serverPort, int debugFlag);
 // For UDP Server and Client
 int udpServerSetup(int serverPort);
 int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, int serverPort);
+int selectCall(int32_t sockNum, int32_t sec, int32_t usec);
 
 #endif
