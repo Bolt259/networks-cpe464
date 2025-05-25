@@ -141,7 +141,93 @@ STATE filename(char * fname, int32_t buf_size, Connection * server)
     int32_t recvCheck = 0;
     static int retryCnt = 0;
 
-    if ((retVal))
+    if ((retVal = processSelect(server, &retryCnt, START, FILE_OK, DONE)) == FILE_OK)
+    {
+        recvCheck = recv_buff(packet, MAX_PACK_LEN, server->socketNum, server, &flag, &seqNum);
+        
+        // check for bit flips
+        if (recvCheck == CRC_ERROR)
+        {
+            retVal = START;
+        }
+        else if (flag == FNAME_BAD)
+        {
+            printf("File %s is not found\n", fname);
+            retVal = DONE;
+        }
+        else if (flag == DATA)
+        {
+            // file yes/no packet lost - instead its a data packet
+            retVal = FILE_OK;
+        }
+    }
+    return retVal;
+}
+
+STATE file_ok(int * outFileFd, char * outFileName)
+{
+    STATE retVal = DONE;
+
+    if ((*outFileFd = open(outFileName, O_CREAT | O_TRUNC | O_WRONLY, 0600)) < 0)
+    {
+        perror("File open error: ");
+        retVal = DONE;
+    }
+    else
+    {   // file opened and ready to receive data
+        retVal = RECV_DATA;
+    }
+    return retVal;
+}
+
+STATE recv_data(int32_t outFile, Connection * server, uint32_t * clientSeqNum)
+{
+    uint32_t seqNum = 0;
+    uint32_t ackSeqNum = 0;
+    uint8_t flag = 0;
+    int32_t dataLen = 0;
+    uint8_t dataBuff[MAX_PACK_LEN];
+    uint8_t packet[MAX_PACK_LEN];
+    static int32_t expectedSeqNum = START_SEQ_NUM;
+
+    if (selectCall(server->socketNum, LONG_TIME, 0) == 0)
+    {
+        printf("Timeout after 10 seconds, server must be gone.\n");
+        return DONE;
+    }
+
+    dataLen = recv_buff(dataBuff, MAX_PACK_LEN, server->socketNum, server, &flag, &seqNum);
+
+    // do state RECV_DATA again if there is a  crc error (don't send ack, don't write data)
+    if (dataLen == CRC_ERROR)
+    {
+        return RECV_DATA;
+    }
+    if (flag == END_OF_FILE)
+    {
+        // send ACK
+        send_buff(packet, 1, server, EOF_ACK, *clientSeqNum, packet);
+        (*clientSeqNum)++;
+        printf("File done\n");
+        return DONE;
+    }
+    else
+    {
+        // send ACK
+        ackSeqNum = htonl(seqNum);
+        send_buff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK, *clientSeqNum, packet);
+        (*clientSeqNum)++;
+    }
+
+    if (seqNum == expectedSeqNum)
+    {
+        // write data to file
+        expectedSeqNum++;
+        write(outFile, &dataBuff, dataLen);
+        // write(outFile, &dataBuff[sizeof(Header)], dataLen)    <~!*> CHECK THE OUT FILE FOR HEADER WRITTEN ACCIDENTALLY
+    }
+    return RECV_DATA;
+}
 
 void checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 {

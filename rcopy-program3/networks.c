@@ -176,6 +176,29 @@ int udpServerSetup(int serverPort)
 	
 }
 
+int udpClientSetup(char * hostName, int serverPort, Connection * connection)
+{
+	memset(&connection->remote, 0, sizeof(struct sockaddr_in6));
+	connection->socketNum = 0;
+	connection->addrLen = sizeof(struct sockaddr_in6);
+	connection->remote.sin6_family = AF_INET6; // use IPv6 family
+	connection->remote.sin6_port = htons(serverPort);
+
+	// create the socket
+	connection->socketNum = safeGetUdpSocket();
+
+	if (gethostbyname6(hostName, &connection->remote) == NULL)
+	{
+		fprintf(stderr, "Error: could not resolve host name %s\n", hostName);
+		return -1;
+	}
+
+	printf("Server info - ");
+	printIPv6Info(&connection->remote);
+
+	return 0;
+}
+
 // This function opens a socket and fills in the serverAdress structure using the hostName and serverPort.  
 // It assumes the address structure is created before calling this.
 // Returns the socket number and the filled in serverAddress struct.
@@ -241,4 +264,30 @@ int selectCall(int32_t sockNum, int32_t sec, int32_t usec)
 	{
 		return 0; // socket is not ready
 	}
+}
+
+// safeSendto wrapper for Connection struct
+int safeSendTo(void * buf, int len, Connection * to)
+{
+	int returnValue = 0;
+	if ((returnValue = sendtoErr(to->socketNum, buf, (size_t) len, 0, (struct sockaddr *) &(to->remote), to->addrLen)) < 0)
+	{
+		perror("sendtoErr: ");
+		exit(-1);
+	}
+	
+	return returnValue;
+}
+
+// safeRecv wrapper for Connection struct
+int safeRecvFrom(void * buf, int len, Connection * from)
+{
+	int returnValue = 0;
+	if ((returnValue = recvfrom(from->socketNum, buf, (size_t) len, 0, (struct sockaddr *) &(from->remote), &(from->addrLen))) < 0)
+	{
+		perror("recvfrom: ");
+		exit(-1);
+	}
+	
+	return returnValue;
 }

@@ -16,7 +16,7 @@ int32_t send_buff(uint8_t * buff, uint32_t len, Connection * connection,
     }
     sendingLen = createHeader(len, flag, seqNum, packet);
 
-    sentLen = safeSendToErr(packet, sendingLen, connection);
+    sentLen = safeSendTo(packet, sendingLen, connection);
     return sentLen;
 }
 
@@ -39,6 +39,7 @@ int createHeader(uint32_t len, uint8_t flag, uint32_t seqNum, uint8_t * packet)
     return sizeof(Header) + len;
 }
 
+// Receives a buffer of data from the socket, retrieves the header, returns the data length
 int32_t recv_buff(uint8_t * buff, int32_t len, int32_t recvSockNum,
                   Connection * connection, uint8_t * flag, uint32_t * seqNum)
 {
@@ -46,7 +47,7 @@ int32_t recv_buff(uint8_t * buff, int32_t len, int32_t recvSockNum,
     int32_t recvLen = 0;
     int32_t dataLen = 0;
 
-    recvLen = safeRecvFromErr(recvSockNum, dataBuff, len, connection);
+    recvLen = safeRecvFrom(dataBuff, len, connection);
 
     dataLen = retrieveHeader(dataBuff, recvLen, flag, seqNum);
 
