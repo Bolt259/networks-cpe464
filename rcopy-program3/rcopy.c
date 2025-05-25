@@ -21,6 +21,8 @@
 #include "safeUtil.h"
 #include "pdu.h"
 #include "cpe464.h"
+#include "pollLib.h"
+#include "srej.h"
 
 #define MAX_PACK_LEN 1500
 #define MAX_BUFF_SIZE 1400
@@ -30,12 +32,6 @@ typedef enum State STATE;
 enum State
 {
 	START, FILENAME, FILE_OK, RECV_DATA, DONE
-};
-
-enum FLAG
-{
-    FNAME=7, DATA=3, FNAME_OK=8, FNAME_BAD=9, ACK=5,
-    END_OF_FILE=10, EOF_ACK=11, CRC_ERROR=-1
 };
 
 void transferFile(char * argv[]);

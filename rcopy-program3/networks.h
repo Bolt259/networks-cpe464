@@ -16,6 +16,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include "gethostbyname.h"
+
 #define LISTEN_BACKLOG 10
 
 typedef struct connection
@@ -25,16 +27,21 @@ typedef struct connection
     uint32_t addrLen;		// length of the address
 } Connection;
 
-// for the TCP server side
-int tcpServerSetup(int serverPort);
-int tcpAccept(int mainServerSocket, int debugFlag);
+int safeGetUdpSocket();
 
-// for the TCP client side
-int tcpClientSetup(char * serverName, char * serverPort, int debugFlag);
+// // for the TCP server side
+// int tcpServerSetup(int serverPort);
+// int tcpAccept(int mainServerSocket, int debugFlag);
+
+// // for the TCP client side
+// int tcpClientSetup(char * serverName, char * serverPort, int debugFlag);
 
 // For UDP Server and Client
 int udpServerSetup(int serverPort);
-int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, int serverPort);
+*int udpClientSetup(char * hostName, int serverPort, Connection * connection);
+// int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, int serverPort);
 int selectCall(int32_t sockNum, int32_t sec, int32_t usec);
+*int safeSendto(uint8_t * packet, uint32_t len, Connection * connection);
+*int safeRecvfrom(uint8_t * buffer, uint32_t len, Connection * connection);
 
 #endif

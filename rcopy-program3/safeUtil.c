@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 
 #include "safeUtil.h"
+#include "networks.h"
 
 #ifdef __LIBCPE464_
 #include "cpe464.h"
@@ -27,13 +28,39 @@ int safeRecvfrom(int socketNum, void * buf, int len, int flags, struct sockaddr 
 	
 	return returnValue;
 }
-// loinely
+
 int safeSendto(int socketNum, void * buf, int len, int flags, struct sockaddr *srcAddr, int addrLen)
 {
 	int returnValue = 0;
 	if ((returnValue = sendtoErr(socketNum, buf, (size_t) len, flags, srcAddr, (socklen_t) addrLen)) < 0)	// changed to sendtoErr
 	{
 		perror("sendtoErr: ");
+		exit(-1);
+	}
+	
+	return returnValue;
+}
+
+// safeSendto wrapper for Connection struct
+int safeSendToErr(void * buf, int len, Connection * connection)
+{
+	int returnValue = 0;
+	if ((returnValue = sendtoErr(connection->socketNum, buf, (size_t) len, 0, (struct sockaddr *) &connection->remote, connection->addrLen)) < 0)
+	{
+		perror("sendtoErr: ");
+		exit(-1);
+	}
+	
+	return returnValue;
+}
+
+// safeRecv wrapper for Connection struct
+int safeRecvFromErr(void * buf, int len, Connection * connection)
+{
+	int returnValue = 0;
+	if ((returnValue = recvfrom(connection->socketNum, buf, (size_t) len, 0, (struct sockaddr *) &connection->remote, &connection->addrLen)) < 0)
+	{
+		perror("recvfrom: ");
 		exit(-1);
 	}
 	
