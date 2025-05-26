@@ -55,7 +55,7 @@ int main (int argc, char *argv[])
 
 	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
 	
-	talkToServer(socketNum, &server);
+	transferFile(argv);
 	
 	close(socketNum);
 

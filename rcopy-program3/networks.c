@@ -267,10 +267,10 @@ int selectCall(int32_t sockNum, int32_t sec, int32_t usec)
 }
 
 // safeSendto wrapper for Connection struct
-int safeSendTo(void * buf, int len, Connection * to)
+int safeSendTo(void * buff, int len, Connection * to)
 {
 	int returnValue = 0;
-	if ((returnValue = sendtoErr(to->socketNum, buf, (size_t) len, 0, (struct sockaddr *) &(to->remote), to->addrLen)) < 0)
+	if ((returnValue = sendtoErr(to->socketNum, buff, (size_t) len, 0, (struct sockaddr *) &(to->remote), to->addrLen)) < 0)
 	{
 		perror("sendtoErr: ");
 		exit(-1);
@@ -280,10 +280,10 @@ int safeSendTo(void * buf, int len, Connection * to)
 }
 
 // safeRecv wrapper for Connection struct
-int safeRecvFrom(void * buf, int len, Connection * from)
+int safeRecvFrom(void * buff, int len, Connection * from)
 {
 	int returnValue = 0;
-	if ((returnValue = recvfrom(from->socketNum, buf, (size_t) len, 0, (struct sockaddr *) &(from->remote), &(from->addrLen))) < 0)
+	if ((returnValue = recvfrom(from->socketNum, buff, (size_t) len, 0, (struct sockaddr *) &(from->remote), &(from->addrLen))) < 0)
 	{
 		perror("recvfrom: ");
 		exit(-1);

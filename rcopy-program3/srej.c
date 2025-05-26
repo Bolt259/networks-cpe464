@@ -3,7 +3,7 @@
 
 #include "srej.h"
 
-int32_t send_buff(uint8_t * buff, uint32_t len, Connection * connection,
+int32_t sendBuff(uint8_t * buff, uint32_t len, Connection * connection,
                   uint8_t flag, uint32_t seqNum, uint8_t * packet)
 {
     int32_t sentLen = 0;
@@ -40,7 +40,7 @@ int createHeader(uint32_t len, uint8_t flag, uint32_t seqNum, uint8_t * packet)
 }
 
 // Receives a buffer of data from the socket, retrieves the header, returns the data length
-int32_t recv_buff(uint8_t * buff, int32_t len, int32_t recvSockNum,
+int32_t recvBuff(uint8_t * buff, int32_t len, int32_t recvSockNum,
                   Connection * connection, uint8_t * flag, uint32_t * seqNum)
 {
     uint8_t dataBuff[MAX_PACK_LEN];

@@ -41,7 +41,7 @@ int udpServerSetup(int serverPort);
 int udpClientSetup(char * hostName, int serverPort, Connection * connection);
 // int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, int serverPort);
 int selectCall(int32_t sockNum, int32_t sec, int32_t usec);
-int safeSendTo(uint8_t * packet, uint32_t len, Connection * connection);
-int safeRecvFrom(uint8_t * buffer, uint32_t len, Connection * connection);
+int safeSendTo(void * buff, int len, Connection * to);
+int safeRecvFrom(void * buff, int len, Connection * from);
 
 #endif

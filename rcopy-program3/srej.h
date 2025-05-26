@@ -46,10 +46,10 @@ enum FLAG
     END_OF_FILE=10, EOF_ACK=11, CRC_ERROR=-1
 };
 
-int32_t send_buff(uint8_t * buff, uint32_t len, Connection * connection,
+int32_t sendBuff(uint8_t * buff, uint32_t len, Connection * connection,
     uint8_t flag, uint32_t seqNum, uint8_t * packet);
 int createHeader(uint32_t len, uint8_t flag, uint32_t seqNum, uint8_t * packet);
-int32_t recv_buff(uint8_t * buff, int32_t len, int32_t recvSockNum,
+int32_t recvBuff(uint8_t * buff, int32_t len, int32_t recvSockNum,
     Connection * connection, uint8_t * flag, uint32_t * seqNum);
 int retrieveHeader(uint8_t * dataBuff, int recvLen, uint8_t * flag, uint32_t * seqNum);
 int processSelect(Connection * client, int * retryCnt, int selectTimeoutState, int dataReadyState, int doneState);
