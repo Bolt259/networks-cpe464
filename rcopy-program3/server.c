@@ -20,7 +20,7 @@
 #include "srej.h"
 #include <bits/waitflags.h>
 
-#define MAX_PACK_LEN 1500
+#define MAX_LEN 1500	// previously MAX_PACK_LEN
 #define MAX_BUFF_SIZE 1400
 
 typedef enum State STATE;
@@ -52,10 +52,10 @@ int main ( int argc, char *argv[]  )
 	float errorRate = 0;
 
 	checkArgs(argc, argv, &errorRate, &portNumber);
-
-	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
 	
 	serverSock = udpServerSetup(portNumber);
+
+	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
 	
 	serverTransfer(serverSock);
 
@@ -69,7 +69,7 @@ void serverTransfer(int serverSock)
 	// This function is the main loop for the server, it waits for clients
 	// to connect and processes their requests in a forked child process.
 	pid_t pid = 0;
-	uint8_t buff[MAX_PACK_LEN];
+	uint8_t buff[MAX_LEN];
 	Connection * client = (Connection *) calloc(1, sizeof(Connection));
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
@@ -84,7 +84,7 @@ void serverTransfer(int serverSock)
 	while (1)
 	{
 		// block waiting for new client
-		recvLen = recvBuff(buff, MAX_PACK_LEN, serverSock, client, &flag, &seqNum);
+		recvLen = recvBuff(buff, MAX_LEN, serverSock, client, &flag, &seqNum);
 		// recvLen = safeRecvfrom(socketNum, buff, sizeof(buff), 0, (struct sockaddr *)&client, &clientAddrLen);
 		if (recvLen != CRC_ERROR)
 		{
@@ -110,7 +110,7 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 	STATE state = START;
 	int32_t dataFile = 0;
 	int32_t packetLen = 0;
-	uint8_t packet[MAX_PACK_LEN];
+	uint8_t packet[MAX_LEN];
 	int32_t buffSize = 0;
 	uint32_t seqNum = START_SEQ_NUM;
 
@@ -153,7 +153,7 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 	int32_t *dataFile, int32_t *buffSize)
 {
 	uint8_t response[1];
-	char fname[MAX_PACK_LEN];	// <~!*> check the length here
+	char fname[MAX_LEN];	// <~!*> check the length here
 	STATE retVal = DONE;
 
 	// extract buffer size used for sending data and filename
@@ -211,8 +211,8 @@ STATE waitOnAck(Connection *client)
 	// Wait for ACK from client
 	STATE retVal = DONE;
 	uint32_t crcCheck = 0;
-	uint8_t buff[MAX_PACK_LEN];
-	int32_t len = MAX_PACK_LEN;
+	uint8_t buff[MAX_LEN];
+	int32_t len = MAX_LEN;
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	static int retryCnt = 0;
@@ -243,8 +243,8 @@ STATE waitOnAck(Connection *client)
 {
 	STATE retVal = DONE;
 	uint32_t crcCheck = 0;
-	uint8_t buff[MAX_PACK_LEN];
-	int32_t len = MAX_PACK_LEN;
+	uint8_t buff[MAX_LEN];
+	int32_t len = MAX_LEN;
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	static int retryCnt = 0;
@@ -270,8 +270,8 @@ STATE waitOnEofAck(Connection *client)
 {
 	STATE retVal = DONE;
 	uint32_t crcCheck = 0;
-	uint8_t buff[MAX_PACK_LEN];
-	int32_t len = MAX_PACK_LEN;
+	uint8_t buff[MAX_LEN];
+	int32_t len = MAX_LEN;
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	static int retryCnt = 0;
