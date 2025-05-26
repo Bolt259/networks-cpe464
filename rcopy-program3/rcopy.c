@@ -240,13 +240,33 @@ void checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 		printf("usage: %s <filepath src> <filepath dest> <window size> <buffer size> <error rate> <host name> <port number> \n", argv[0]);
 		exit(1);
 	}
+    if (strlen(argv[1]) > 1000)
+    {
+        printf("FROM filename too long needs to be less than 1000 and is %ld\n", strlen(argv[1]));
+        exit(-1);
+    }
+    if (strlen(argv[2]) > 1000)
+    {
+        printf("TO filename too long needs to be less than 1000 and is %ld\n", strlen(argv[2]));
+        exit(-1);
+    }
+    if (atoi(argv[3]) < 1 || atoi(argv[3]) > 229)
+    {
+        fprintf(stderr, "Window size must be between 1 and 229 inclusive and is %d\n", atoi(argv[3]));
+        exit(-1);
+    }
+    if (atoi(argv[4]) < 400 || atoi(argv[4]) > 1400)
+    {
+        fprintf(stderr, "Buffer size must be between 400 and 1400 and is %d\n", atoi(argv[4]));
+        exit(-1);
+    }
+    if (atoi(argv[5]) < 0 || atoi(argv[5]) >= 1)
+    {
+        fprintf(stderr, "Error rate must be between 0 and less than 1 and is %f\n", atof(argv[5]));
+        exit(-1);
+    }
 
 	*portNumber = atoi(argv[7]);
 	*errorRate = atof(argv[5]);
-	if (*errorRate < 0 || *errorRate >= 1)
-	{
-		fprintf(stderr, "Error rate must be between 0 and less than 1\n");
-		exit(-1);
-	}
 }
 
