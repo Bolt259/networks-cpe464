@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "unistd.h": "c",
-        "gethostbyname.h": "c"
+        "gethostbyname.h": "c",
+        "socket.h": "c"
     }
 }

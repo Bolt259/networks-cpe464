@@ -24,7 +24,7 @@
 #include "pollLib.h"
 #include "srej.h"
 
-#define MAX_PACKET_LEN 1500
+#define MAX_PACK_LEN 1500
 #define MAX_PAYLOAD 1400
 #define MAX_FNAME_LEN 100
 
@@ -100,8 +100,8 @@ void transferFile(char *argv[])
 
 STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
 {
-    uint8_t packet[MAX_PACKET_LEN] = {0};
-    uint8_t buffer[MAX_PACKET_LEN] = {0};
+    uint8_t packet[MAX_PACK_LEN] = {0};
+    uint8_t buffer[MAX_PACK_LEN] = {0};
     int fileNameLen = strlen(argv[1]);
     STATE retVal = FILENAME;
     uint32_t bufferLen = 0;
@@ -144,7 +144,7 @@ STATE filename(char *fname, int32_t buf_size, Connection *server)
     // get server response
     // returns START if no reply, DONE if bad filename, FILE_OK otherwise
     int retVal = START;
-    uint8_t packet[MAX_PACKET_LEN];
+    uint8_t packet[MAX_PACK_LEN];
     uint8_t flag = 0;
     uint32_t seqNum = 0;
     int32_t recvCheck = 0;
@@ -152,7 +152,7 @@ STATE filename(char *fname, int32_t buf_size, Connection *server)
 
     if ((retVal = processSelect(server, &retryCnt, START, FILE_OK, DONE)) == FILE_OK)
     {
-        recvCheck = recvBuff(packet, MAX_PACKET_LEN, server->socketNum, server, &flag, &seqNum);
+        recvCheck = recvBuff(packet, MAX_PACK_LEN, server->socketNum, server, &flag, &seqNum);
 
         // check for bit flips
         if (recvCheck == CRC_ERROR)
@@ -195,8 +195,8 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum)
     uint32_t ackSeqNum = 0;
     uint8_t flag = 0;
     int32_t dataLen = 0;
-    uint8_t dataBuff[MAX_PACKET_LEN];
-    uint8_t packet[MAX_PACKET_LEN];
+    uint8_t dataBuff[MAX_PACK_LEN];
+    uint8_t packet[MAX_PACK_LEN];
     static int32_t expectedSeqNum = START_SEQ_NUM;
 
     if (selectCall(server->socketNum, LONG_TIME, 0) == 0)
@@ -205,7 +205,7 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum)
         return DONE;
     }
 
-    dataLen = recvBuff(dataBuff, MAX_PACKET_LEN, server->socketNum, server, &flag, &seqNum);
+    dataLen = recvBuff(dataBuff, MAX_PACK_LEN, server->socketNum, server, &flag, &seqNum);
 
     // do state RECV_DATA again if there is a  crc error (don't send ack, don't write data)
     if (dataLen == CRC_ERROR)

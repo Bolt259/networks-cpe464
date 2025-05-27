@@ -21,7 +21,7 @@
 #include "srej.h"
 #include <bits/waitflags.h>
 
-#define MAX_PACKET_LEN 1500
+#define MAX_PACK_LEN 1500
 #define MAX_PAYLOAD 1400
 #define MAX_FNAME_LEN 100
 
@@ -77,7 +77,7 @@ void serverTransfer(int serverSock)
 	// This function is the main loop for the server, it waits for clients
 	// to connect and processes their requests in a forked child process.
 	pid_t pid = 0;
-	uint8_t buff[MAX_PACKET_LEN] = {0};
+	uint8_t buff[MAX_PACK_LEN] = {0};
 	Connection *client = (Connection *)calloc(1, sizeof(Connection));
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
@@ -92,7 +92,7 @@ void serverTransfer(int serverSock)
 	while (1)
 	{
 		// block waiting for new client
-		recvLen = recvBuff(buff, MAX_PACKET_LEN, serverSock, client, &flag, &seqNum);
+		recvLen = recvBuff(buff, MAX_PACK_LEN, serverSock, client, &flag, &seqNum);
 		// recvLen = safeRecvfrom(socketNum, buff, sizeof(buff), 0, (struct sockaddr *)&client, &clientAddrLen);
 		if (recvLen != CRC_ERROR)
 		{
@@ -118,7 +118,7 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 	STATE state = START;
 	int32_t dataFile = 0;
 	int32_t packetLen = 0;
-	uint8_t packet[MAX_PACKET_LEN] = {0};
+	uint8_t packet[MAX_PACK_LEN] = {0};
 	int32_t buffSize = 0;
 	uint32_t seqNum = START_SEQ_NUM;
 
@@ -164,14 +164,15 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 	char fname[MAX_FNAME_LEN];
 	STATE retVal = DONE;
 
-	// extract buffer size used for sending data and filename
+	// extract header size on packet for sending data and filename
 	memcpy(buffSize, buff, BUFF_SIZE);
 	*buffSize = ntohl(*buffSize);
-	memcpy(fname, &buff[sizeof(*buffSize)], recvLen - BUFF_SIZE);
+	memcpy(fname, &buff[sizeof(*buffSize)], recvLen - BUFF_SIZE); // <~!*> recvLen - BUFF_SIZE should never be larger than MAX_FNAME_LEN
 
 	// create client socket for each particular client
 	client->socketNum = safeGetUdpSocket();
 
+	// if fname found send fname ok flag, else send fname bad flag
 	if (((*dataFile) = open(fname, O_RDONLY)) < 0)
 	{
 		sendBuff(response, 0, client, FNAME_BAD, 0, buff);
@@ -219,8 +220,8 @@ STATE waitOnEofAck(Connection *client)
 	// Wait for ACK from client
 	STATE retVal = DONE;
 	uint32_t crcCheck = 0;
-	uint8_t buff[MAX_PACKET_LEN] = {0};
-	int32_t len = MAX_PACKET_LEN;
+	uint8_t buff[MAX_PACK_LEN] = {0};
+	int32_t len = MAX_PACK_LEN;
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	static int retryCnt = 0;
@@ -251,8 +252,8 @@ STATE waitOnAck(Connection *client)
 {
 	STATE retVal = DONE;
 	uint32_t crcCheck = 0;
-	uint8_t buff[MAX_PACKET_LEN] = {0};
-	int32_t len = MAX_PACKET_LEN;
+	uint8_t buff[MAX_PACK_LEN] = {0};
+	int32_t len = MAX_PACK_LEN;
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	static int retryCnt = 0;
@@ -320,5 +321,6 @@ int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 void reapZombies(int sig)
 {
 	int status = 0;
-	while (waitpid(-1, &status, WNOHANG) > 0);
+	while (waitpid(-1, &status, WNOHANG) > 0)
+		;
 }
