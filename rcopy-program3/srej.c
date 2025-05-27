@@ -47,7 +47,7 @@ int32_t recvBuff(uint8_t * buff, int32_t len, int32_t recvSockNum,
     int32_t recvLen = 0;
     int32_t dataLen = 0;
 
-    recvLen = safeRecvFrom(dataBuff, len, connection);
+    recvLen = safeRecvFrom(recvSockNum, dataBuff, len, connection);
 
     dataLen = retrieveHeader(dataBuff, recvLen, flag, seqNum);
 
@@ -63,7 +63,7 @@ int retrieveHeader(uint8_t * dataBuff, int recvLen, uint8_t * flag, uint32_t * s
     Header * hdr = (Header *)dataBuff;
     int retVal = 0;
 
-    if (in_chksum((unsigned short *)dataBuff, recvLen) != 0)
+    if (in_cksum((unsigned short *)dataBuff, recvLen) != 0)
     {
         retVal = CRC_ERROR; // checksum error
     }

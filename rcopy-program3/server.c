@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 #include "gethostbyname.h"
 #include "networks.h"
@@ -206,7 +207,7 @@ STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
 	return retVal;
 }
 
-STATE waitOnAck(Connection *client)
+STATE waitOnEofAck(Connection *client)
 {
 	// Wait for ACK from client
 	STATE retVal = DONE;
@@ -266,38 +267,6 @@ STATE waitOnAck(Connection *client)
 	return retVal;
 }
 
-STATE waitOnEofAck(Connection *client)
-{
-	STATE retVal = DONE;
-	uint32_t crcCheck = 0;
-	uint8_t buff[MAX_LEN];
-	int32_t len = MAX_LEN;
-	uint8_t flag = 0;
-	uint32_t seqNum = 0;
-	static int retryCnt = 0;
-
-	if ((retVal = processSelect(client, &retryCnt, TIMEOUT_ON_EOF_ACK, DONE, DONE)) == DONE)
-	{
-		crcCheck = recvBuff(buff, len, client->socketNum, client, &flag, &seqNum);
-		// if crc error ignore packet
-		if (crcCheck == CRC_ERROR)
-		{
-			retVal = WAIT_ON_EOF_ACK;
-		}
-		else if (flag != EOF_ACK)
-		{
-			printf("In wait_on_eof_ack but its not an EOF_ACK flag (this should never happen) is: %d\n", flag);
-			retVal = DONE;
-		}
-		else
-		{
-			printf("File transfer completed successfully.\n");
-			retVal = DONE;
-		}
-	}
-	return retVal;
-}
-
 STATE timeoutOnAck(Connection *client, uint8_t *packet, int32_t packetLen)
 {
 	safeSendTo(packet, packetLen, client);
@@ -325,19 +294,16 @@ int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 		fprintf(stderr, "Usage %s <error rate> [optional port number]\n", argv[0]);
 		exit(-1);
 	}
+
+	*errorRate = atof(argv[1]);
+	if (*errorRate < 0 || *errorRate >= 1)
+	{
+		fprintf(stderr, "Error rate must be between 0 and less than 1\n");
+		exit(-1);
+	}
 	if (argc == 3)
 	{
-		*errorRate = atof(argv[1]);
-		if (*errorRate < 0 || *errorRate >= 1)
-		{
-			fprintf(stderr, "Error rate must be between 0 and less than 1\n");
-			exit(-1);
-		}
 		*portNumber = atoi(argv[2]);
-	}
-	else if (argc == 2)
-	{
-		*portNumber = atoi(argv[1]);
 	}
 
 	return status;

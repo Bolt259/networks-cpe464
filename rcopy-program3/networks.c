@@ -2,24 +2,7 @@
 // Hugh Smith April 2017
 // Network code to support TCP/UDP client and server connections
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/uio.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-
 #include "networks.h"
-#include "gethostbyname.h"
-
-
 
 // This function sets the server socket. The function returns the server
 // socket number and prints the port number to the screen.  
@@ -170,9 +153,9 @@ int udpServerSetup(int serverPort)
 	/* Get the port number */
 	serverAddrLen = sizeof(serverAddress);
 	getsockname(socketNum,(struct sockaddr *) &serverAddress,  (socklen_t *) &serverAddrLen);
-	printf("Server using Port #: %d\n", ntohs(serverAddress.sin6_port));
+	printf("Server is using port: %d\n", ntohs(serverAddress.sin6_port));
 
-	return socketNum;	
+	return socketNum;
 	
 }
 
@@ -194,7 +177,7 @@ int udpClientSetup(char * hostName, int serverPort, Connection * connection)
 	}
 
 	printf("Server info - ");
-	printIPv6Info(&connection->remote);
+	printIPInfo(&connection->remote);
 
 	return 0;
 }
@@ -203,34 +186,34 @@ int udpClientSetup(char * hostName, int serverPort, Connection * connection)
 // It assumes the address structure is created before calling this.
 // Returns the socket number and the filled in serverAddress struct.
 
-int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, int serverPort)
-{
-	int socketNum = 0;
-	char ipString[INET6_ADDRSTRLEN];
-	uint8_t * ipAddress = NULL;
+// int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, int serverPort)
+// {
+// 	int socketNum = 0;
+// 	char ipString[INET6_ADDRSTRLEN];
+// 	uint8_t * ipAddress = NULL;
 	
-	// create the socket
-	if ((socketNum = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
-	{
-		perror("socket() call error");
-		exit(-1);
-	}
+// 	// create the socket
+// 	if ((socketNum = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
+// 	{
+// 		perror("socket() call error");
+// 		exit(-1);
+// 	}
   	 	
-	memset(serverAddress, 0, sizeof(struct sockaddr_in6));
-	serverAddress->sin6_port = ntohs(serverPort);
-	serverAddress->sin6_family = AF_INET6;	
+// 	memset(serverAddress, 0, sizeof(struct sockaddr_in6));
+// 	serverAddress->sin6_port = ntohs(serverPort);
+// 	serverAddress->sin6_family = AF_INET6;	
 	
-	if ((ipAddress = gethostbyname6(hostName, serverAddress)) == NULL)
-	{
-		exit(-1);
-	}
+// 	if ((ipAddress = gethostbyname6(hostName, serverAddress)) == NULL)
+// 	{
+// 		exit(-1);
+// 	}
 		
 	
-	inet_ntop(AF_INET6, ipAddress, ipString, sizeof(ipString));
-	printf("Server info - IP: %s Port: %d \n", ipString, serverPort);
+// 	inet_ntop(AF_INET6, ipAddress, ipString, sizeof(ipString));
+// 	printf("Server info - IP: %s Port: %d \n", ipString, serverPort);
 		
-	return socketNum;
-}
+// 	return socketNum;
+// }
 
 int selectCall(int32_t sockNum, int32_t sec, int32_t usec)
 {
@@ -266,8 +249,20 @@ int selectCall(int32_t sockNum, int32_t sec, int32_t usec)
 	}
 }
 
+int safeGetUdpSocket()
+{
+	int sockNum = 0;
+
+	if ((sockNum = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
+	{
+		perror("safeGetUdpSocket(), socket() call: ");
+		exit(-1);
+	}
+	return sockNum;
+}
+
 // safeSendto wrapper for Connection struct
-int safeSendTo(void * buff, int len, Connection * to)
+int safeSendTo(uint8_t * buff, int len, Connection * to)
 {
 	int returnValue = 0;
 	if ((returnValue = sendtoErr(to->socketNum, buff, (size_t) len, 0, (struct sockaddr *) &(to->remote), to->addrLen)) < 0)
@@ -280,10 +275,10 @@ int safeSendTo(void * buff, int len, Connection * to)
 }
 
 // safeRecv wrapper for Connection struct
-int safeRecvFrom(void * buff, int len, Connection * from)
+int safeRecvFrom(int recvSockNum, uint8_t * buff, int len, Connection * from)
 {
 	int returnValue = 0;
-	if ((returnValue = recvfrom(from->socketNum, buff, (size_t) len, 0, (struct sockaddr *) &(from->remote), &(from->addrLen))) < 0)
+	if ((returnValue = recvfrom(recvSockNum, buff, (size_t) len, 0, (struct sockaddr *) &(from->remote), &(from->addrLen))) < 0)
 	{
 		perror("recvfrom: ");
 		exit(-1);

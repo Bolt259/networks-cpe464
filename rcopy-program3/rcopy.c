@@ -43,21 +43,20 @@ void checkArgs(int argc, char *argv[], float *errorRate, int *portNumber);
 
 int main (int argc, char *argv[])
 {
-	int socketNum = 0;
-	int inputStatus = 0;				
-	struct sockaddr_in6 server;		// Supports 4 and 6 but requires IPv6 struct
+	// int socketNum = 0;
+	// struct sockaddr_in6 server;		// Supports 4 and 6 but requires IPv6 struct
 	int portNumber = 0;
 	float errorRate = 0;
 
 	checkArgs(argc, argv, &errorRate, &portNumber);
 
-	socketNum = setupUdpClientToServer(&server, argv[2], portNumber);
+	// socketNum = setupUdpClientToServer(&server, argv[2], portNumber);
 
 	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
 	
 	transferFile(argv);
 	
-	close(socketNum);
+	// close(socketNum);
 
 	return 0;
 }
@@ -108,7 +107,7 @@ STATE start_state(char ** argv, Connection * server, uint32_t * clientSeqNum)
         close(server->socketNum);
     }
 
-    if (setupUdpClientToServer(&server->remote, argv[2], atoi(argv[3])) < 0)
+    if (udpClientSetup(argv[6], atoi(argv[7]), server) < 0)
     {
         // could not connect to server
         retVal = DONE;
@@ -119,7 +118,7 @@ STATE start_state(char ** argv, Connection * server, uint32_t * clientSeqNum)
         bufferLen = htonl(atoi(argv[4]));
         memcpy(buffer, &bufferLen, MAX_BUFF_SIZE);
         memcpy(&buffer[MAX_BUFF_SIZE], argv[1], fileNameLen);
-        printIPv6Info(&server->remote);
+        printIPInfo(&server->remote);
         // send packet to server with filename
         createPDU(packet, *clientSeqNum, FNAME, buffer, MAX_BUFF_SIZE + fileNameLen);
         sendtoErr(server->socketNum, packet, MAX_BUFF_SIZE + fileNameLen, 0,
@@ -143,7 +142,7 @@ STATE filename(char * fname, int32_t buf_size, Connection * server)
 
     if ((retVal = processSelect(server, &retryCnt, START, FILE_OK, DONE)) == FILE_OK)
     {
-        recvCheck = recv_buff(packet, MAX_LEN, server->socketNum, server, &flag, &seqNum);
+        recvCheck = recvBuff(packet, MAX_LEN, server->socketNum, server, &flag, &seqNum);
         
         // check for bit flips
         if (recvCheck == CRC_ERROR)
@@ -196,7 +195,7 @@ STATE recvData(int32_t outFile, Connection * server, uint32_t * clientSeqNum)
         return DONE;
     }
 
-    dataLen = recv_buff(dataBuff, MAX_LEN, server->socketNum, server, &flag, &seqNum);
+    dataLen = recvBuff(dataBuff, MAX_LEN, server->socketNum, server, &flag, &seqNum);
 
     // do state RECV_DATA again if there is a  crc error (don't send ack, don't write data)
     if (dataLen == CRC_ERROR)
@@ -206,7 +205,7 @@ STATE recvData(int32_t outFile, Connection * server, uint32_t * clientSeqNum)
     if (flag == END_OF_FILE)
     {
         // send ACK
-        send_buff(packet, 1, server, EOF_ACK, *clientSeqNum, packet);
+        sendBuff(packet, 1, server, EOF_ACK, *clientSeqNum, packet);
         (*clientSeqNum)++;
         printf("File done\n");
         return DONE;
@@ -215,7 +214,7 @@ STATE recvData(int32_t outFile, Connection * server, uint32_t * clientSeqNum)
     {
         // send ACK
         ackSeqNum = htonl(seqNum);
-        send_buff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK, *clientSeqNum, packet);
+        sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK, *clientSeqNum, packet);
         (*clientSeqNum)++;
     }
 

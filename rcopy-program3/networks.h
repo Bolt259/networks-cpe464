@@ -8,14 +8,19 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/uio.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <strings.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
 #include <netdb.h>
 
+#include "cpe464.h"
 #include "gethostbyname.h"
 
 #define LISTEN_BACKLOG 10
@@ -41,7 +46,7 @@ int udpServerSetup(int serverPort);
 int udpClientSetup(char * hostName, int serverPort, Connection * connection);
 // int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char * hostName, int serverPort);
 int selectCall(int32_t sockNum, int32_t sec, int32_t usec);
-int safeSendTo(void * buff, int len, Connection * to);
-int safeRecvFrom(void * buff, int len, Connection * from);
+int safeSendTo(uint8_t * buff, int len, Connection * to);
+int safeRecvFrom(int recvSockNum, uint8_t * buff, int len, Connection * from);
 
 #endif
