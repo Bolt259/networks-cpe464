@@ -42,8 +42,8 @@ typedef struct header
 
 enum FLAG
 {
-    FNAME=7, DATA=3, FNAME_OK=8, FNAME_BAD=9, ACK=5,
-    END_OF_FILE=10, EOF_ACK=11, CRC_ERROR=-1
+    ACK=5, SREJ=6, FNAME=8, FNAME_OK=9, END_OF_FILE=10, DATA=16, SREJ_DATA=17,
+    TIMEOUT_DATA=18, FNAME_BAD=32, EOF_ACK=33, CRC_ERROR=-1
 };
 
 int32_t sendBuff(uint8_t * buff, uint32_t len, Connection * connection,

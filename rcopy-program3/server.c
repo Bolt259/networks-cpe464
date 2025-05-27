@@ -21,24 +21,31 @@
 #include "srej.h"
 #include <bits/waitflags.h>
 
-#define MAX_LEN 1500	// previously MAX_PACK_LEN
-#define MAX_BUFF_SIZE 1400
+#define MAX_PACKET_LEN 1500
+#define MAX_PAYLOAD 1400
+#define MAX_FNAME_LEN 100
 
 typedef enum State STATE;
 
 enum State
 {
-	START, FILENAME, SEND_DATA, WAIT_ON_ACK, TIMEOUT_ON_ACK, WAIT_ON_EOF_ACK,
-	TIMEOUT_ON_EOF_ACK, DONE
+	START,
+	FILENAME,
+	SEND_DATA,
+	WAIT_ON_ACK,
+	TIMEOUT_ON_ACK,
+	WAIT_ON_EOF_ACK,
+	TIMEOUT_ON_EOF_ACK,
+	DONE
 };
 
 void serverTransfer(int serverSock);
 void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen,
-	Connection *client);
+				   Connection *client);
 STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
-	int32_t *dataFile, int32_t *buffSize);
+			   int32_t *dataFile, int32_t *buffSize);
 STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
-	int32_t dataFile, int32_t buffSize, uint32_t *seqNum);
+			   int32_t dataFile, int32_t buffSize, uint32_t *seqNum);
 STATE waitOnAck(Connection *client);
 STATE timeoutOnAck(Connection *client, uint8_t *packet, int32_t packetLen);
 STATE waitOnEofAck(Connection *client);
@@ -46,22 +53,22 @@ STATE timeoutOnEofAck(Connection *client, uint8_t *packet, int32_t packetLen);
 int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber);
 void reapZombies(int sig);
 
-int main ( int argc, char *argv[]  )
-{ 
-	int serverSock = 0;				
+int main(int argc, char *argv[])
+{
+	int serverSock = 0;
 	int portNumber = 0;
 	float errorRate = 0;
 
 	checkArgs(argc, argv, &errorRate, &portNumber);
-	
+
 	serverSock = udpServerSetup(portNumber);
 
 	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
-	
+
 	serverTransfer(serverSock);
 
 	close(serverSock);
-	
+
 	return 0;
 }
 
@@ -70,22 +77,22 @@ void serverTransfer(int serverSock)
 	// This function is the main loop for the server, it waits for clients
 	// to connect and processes their requests in a forked child process.
 	pid_t pid = 0;
-	uint8_t buff[MAX_LEN];
-	Connection * client = (Connection *) calloc(1, sizeof(Connection));
+	uint8_t buff[MAX_PACKET_LEN] = {0};
+	Connection *client = (Connection *)calloc(1, sizeof(Connection));
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	int32_t recvLen = 0;
 
-	// struct sockaddr_in6 client;		
-	// int clientAddrLen = sizeof(client);	
-	
+	// struct sockaddr_in6 client;
+	// int clientAddrLen = sizeof(client);
+
 	// clean up forked children
 	signal(SIGCHLD, reapZombies);
 
 	while (1)
 	{
 		// block waiting for new client
-		recvLen = recvBuff(buff, MAX_LEN, serverSock, client, &flag, &seqNum);
+		recvLen = recvBuff(buff, MAX_PACKET_LEN, serverSock, client, &flag, &seqNum);
 		// recvLen = safeRecvfrom(socketNum, buff, sizeof(buff), 0, (struct sockaddr *)&client, &clientAddrLen);
 		if (recvLen != CRC_ERROR)
 		{
@@ -111,7 +118,7 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 	STATE state = START;
 	int32_t dataFile = 0;
 	int32_t packetLen = 0;
-	uint8_t packet[MAX_LEN];
+	uint8_t packet[MAX_PACKET_LEN] = {0};
 	int32_t buffSize = 0;
 	uint32_t seqNum = START_SEQ_NUM;
 
@@ -119,42 +126,42 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 	{
 		switch (state)
 		{
-			case START:
-				state = FILENAME;
-				break;
-			case FILENAME:
-				state = filename(client, buff, recvLen, &dataFile, &buffSize);
-				break;
-			case SEND_DATA:
-				state = sendData(client, packet, &packetLen, dataFile, buffSize, &seqNum);
-				break;
-			case WAIT_ON_ACK:
-				state = waitOnAck(client);
-				break;
-			case TIMEOUT_ON_ACK:
-				state = timeoutOnAck(client, packet, packetLen);
-				break;
-			case WAIT_ON_EOF_ACK:
-				state = waitOnEofAck(client);
-				break;
-			case TIMEOUT_ON_EOF_ACK:
-				state = timeoutOnEofAck(client, packet, packetLen);
-				break;
-			case DONE:
-				break;
-			default:
-				printf("ERROR - In default state (processClient)\n");
-				state = DONE;
-				break;
+		case START:
+			state = FILENAME;
+			break;
+		case FILENAME:
+			state = filename(client, buff, recvLen, &dataFile, &buffSize);
+			break;
+		case SEND_DATA:
+			state = sendData(client, packet, &packetLen, dataFile, buffSize, &seqNum);
+			break;
+		case WAIT_ON_ACK:
+			state = waitOnAck(client);
+			break;
+		case TIMEOUT_ON_ACK:
+			state = timeoutOnAck(client, packet, packetLen);
+			break;
+		case WAIT_ON_EOF_ACK:
+			state = waitOnEofAck(client);
+			break;
+		case TIMEOUT_ON_EOF_ACK:
+			state = timeoutOnEofAck(client, packet, packetLen);
+			break;
+		case DONE:
+			break;
+		default:
+			printf("ERROR - In default state (processClient)\n");
+			state = DONE;
+			break;
 		}
 	}
 }
 
 STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
-	int32_t *dataFile, int32_t *buffSize)
+			   int32_t *dataFile, int32_t *buffSize)
 {
 	uint8_t response[1];
-	char fname[MAX_LEN];	// <~!*> check the length here
+	char fname[MAX_FNAME_LEN];
 	STATE retVal = DONE;
 
 	// extract buffer size used for sending data and filename
@@ -179,9 +186,9 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 }
 
 STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
-	int32_t dataFile, int32_t buffSize, uint32_t *seqNum)
+			   int32_t dataFile, int32_t buffSize, uint32_t *seqNum)
 {
-	uint8_t dataBuff[MAX_BUFF_SIZE];
+	uint8_t dataBuff[MAX_PAYLOAD] = {0};
 	int32_t lenRead = 0;
 	STATE retVal = DONE;
 
@@ -189,20 +196,20 @@ STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
 
 	switch (lenRead)
 	{
-		case -1:
-			perror("sendData, read error");
-			retVal = DONE;
-			break;
-		case 0:
-			// end of file, send EOF packet
-			(*packetLen) = sendBuff(dataBuff, 1, client, END_OF_FILE, *seqNum, packet);
-			retVal = WAIT_ON_EOF_ACK;
-			break;
-		default:
-			// send data packet
-			(*packetLen) = sendBuff(dataBuff, lenRead, client, DATA, *seqNum, packet);
-			retVal = WAIT_ON_ACK;
-			break;
+	case -1:
+		perror("sendData, read error");
+		retVal = DONE;
+		break;
+	case 0:
+		// end of file, send EOF packet
+		(*packetLen) = sendBuff(dataBuff, 1, client, END_OF_FILE, *seqNum, packet);
+		retVal = WAIT_ON_EOF_ACK;
+		break;
+	default:
+		// send data packet
+		(*packetLen) = sendBuff(dataBuff, lenRead, client, DATA, *seqNum, packet);
+		retVal = WAIT_ON_ACK;
+		break;
 	}
 	return retVal;
 }
@@ -212,8 +219,8 @@ STATE waitOnEofAck(Connection *client)
 	// Wait for ACK from client
 	STATE retVal = DONE;
 	uint32_t crcCheck = 0;
-	uint8_t buff[MAX_LEN];
-	int32_t len = MAX_LEN;
+	uint8_t buff[MAX_PACKET_LEN] = {0};
+	int32_t len = MAX_PACKET_LEN;
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	static int retryCnt = 0;
@@ -244,8 +251,8 @@ STATE waitOnAck(Connection *client)
 {
 	STATE retVal = DONE;
 	uint32_t crcCheck = 0;
-	uint8_t buff[MAX_LEN];
-	int32_t len = MAX_LEN;
+	uint8_t buff[MAX_PACKET_LEN] = {0};
+	int32_t len = MAX_PACKET_LEN;
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	static int retryCnt = 0;
@@ -313,5 +320,5 @@ int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 void reapZombies(int sig)
 {
 	int status = 0;
-	while (waitpid(-1, &status, WNOHANG) > 0) {}
+	while (waitpid(-1, &status, WNOHANG) > 0);
 }

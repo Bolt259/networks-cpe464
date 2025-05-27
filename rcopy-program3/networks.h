@@ -24,6 +24,7 @@
 #include "gethostbyname.h"
 
 #define LISTEN_BACKLOG 10
+#define MAX_FNAME_LEN 100
 
 typedef struct connection
 {
@@ -31,6 +32,18 @@ typedef struct connection
     struct sockaddr_in6 remote;	// address of the connection
     uint32_t addrLen;		// length of the address
 } Connection;
+
+// struct for all rcopy inputs file SRC and DST, window size, buffer size, error rate, host name, port number
+typedef struct rcopyInputs
+{
+    char srcFile[MAX_FNAME_LEN];
+    char dstFile[MAX_FNAME_LEN];
+    int windowSize;
+    int bufferSize;
+    float errorRate;
+    char hostName[MAX_FNAME_LEN];
+    int portNumber;
+} RcopyInputs;
 
 int safeGetUdpSocket();
 
