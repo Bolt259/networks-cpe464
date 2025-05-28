@@ -20,6 +20,25 @@ int32_t sendBuff(uint8_t * buff, uint32_t len, Connection * connection,
     return sentLen;
 }
 
+// Receives a buffer of data from the socket, retrieves the header, returns the data length
+int32_t recvBuff(uint8_t * buff, int32_t len, int32_t recvSockNum,
+    Connection * connection, uint8_t * flag, uint32_t * seqNum)
+    {
+        uint8_t dataBuff[MAX_PACK_LEN];
+        int32_t recvLen = 0;
+        int32_t dataLen = 0;
+        
+    recvLen = safeRecvFrom(recvSockNum, dataBuff, len, connection);
+
+    dataLen = retrieveHeader(dataBuff, recvLen, flag, seqNum);
+    
+    // dataLen could be -1 if crc error or 0 if no data
+    if (dataLen > 0)
+    memcpy(buff, &dataBuff[sizeof(Header)], dataLen);
+    
+    return dataLen;
+}
+
 int createHeader(uint32_t len, uint8_t flag, uint32_t seqNum, uint8_t * packet)
 {
     // creates the regular header (puts in packet) including seqNum, chksum, and flag
@@ -37,25 +56,6 @@ int createHeader(uint32_t len, uint8_t flag, uint32_t seqNum, uint8_t * packet)
     memcpy(&(hdr->chksum), &chksum, sizeof(chksum));
 
     return sizeof(Header) + len;
-}
-
-// Receives a buffer of data from the socket, retrieves the header, returns the data length
-int32_t recvBuff(uint8_t * buff, int32_t len, int32_t recvSockNum,
-                  Connection * connection, uint8_t * flag, uint32_t * seqNum)
-{
-    uint8_t dataBuff[MAX_PACK_LEN];
-    int32_t recvLen = 0;
-    int32_t dataLen = 0;
-
-    recvLen = safeRecvFrom(recvSockNum, dataBuff, len, connection);
-
-    dataLen = retrieveHeader(dataBuff, recvLen, flag, seqNum);
-
-    // dataLen could be -1 if crc error or 0 if no data
-    if (dataLen > 0)
-        memcpy(buff, &dataBuff[sizeof(Header)], dataLen);
-
-    return dataLen;
 }
 
 int retrieveHeader(uint8_t * dataBuff, int recvLen, uint8_t * flag, uint32_t * seqNum)

@@ -26,7 +26,6 @@
 
 #define MAX_PACK_LEN 1500
 #define MAX_PAYLOAD 1400
-#define MAX_FNAME_LEN 100
 
 typedef enum State STATE;
 
@@ -107,9 +106,9 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
     uint32_t bufferLen = 0;
 
     // check if fileNameLen is too long
-    if (fileNameLen > MAX_FNAME_LEN)
+    if (fileNameLen >= MAX_FNAME_LEN)
     {
-        fprintf(stderr, "Filename too long, must be less than %d characters\n", MAX_FNAME_LEN);
+        fprintf(stderr, "Filename too long, must be less than %d characters\n", (MAX_FNAME_LEN - 1));
         return DONE;
     }
 
@@ -131,8 +130,28 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
         memcpy(buffer, &bufferLen, BUFF_SIZE);
         memcpy(&buffer[BUFF_SIZE], argv[1], fileNameLen);
         printIPInfo(&server->remote);
+
+    //~!* Debugging output to show server remote address info
+        // Print server remote address info
+        char addrStr[INET6_ADDRSTRLEN];
+        void *addrPtr = NULL;
+        uint16_t port = 0;
+
+        if (server->remote.sin6_family == AF_INET6) {
+            addrPtr = &server->remote.sin6_addr;
+            port = ntohs(server->remote.sin6_port);
+        } else {
+            // fallback for IPv4-mapped IPv6 addresses
+            addrPtr = &((struct sockaddr_in *)&server->remote)->sin_addr;
+            port = ntohs(((struct sockaddr_in *)&server->remote)->sin_port);
+        }
+
+        inet_ntop(AF_INET6, addrPtr, addrStr, sizeof(addrStr));
+        printf("\n{DEBUG} Server connected from [%s]:%d\n\n", addrStr, port);
+    //~!*
+
         // send packet to server with filename
-        sendBuff(buffer, fileNameLen + MAX_PAYLOAD, server, FNAME, *clientSeqNum, packet);
+        sendBuff(buffer, BUFF_SIZE + fileNameLen, server, FNAME, *clientSeqNum, packet);
         (*clientSeqNum)++;
     }
 

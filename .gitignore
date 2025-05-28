@@ -58,3 +58,4 @@ server
 # Misc
 *.tar
 rcopy
+*.txt

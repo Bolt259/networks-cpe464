@@ -4,12 +4,31 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "(gdb) child server",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "${workspaceFolder}/server",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
     {
         "name": "(gdb) rcopy",
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/rcopy",
-        "args": ["test.pdf", "downloadedTest.pdf", "10", "1000", ".1", "localhost", "40000"],
+        "args": ["test.pdf", "downloadTestDBG.pdf", "10", "1000", ".1", "localhost", "40000"],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "environment": [],

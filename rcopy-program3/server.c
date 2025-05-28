@@ -23,7 +23,6 @@
 
 #define MAX_PACK_LEN 1500
 #define MAX_PAYLOAD 1400
-#define MAX_FNAME_LEN 100
 
 typedef enum State STATE;
 
@@ -161,16 +160,45 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 			   int32_t *dataFile, int32_t *buffSize)
 {
 	uint8_t response[1];
-	char fname[MAX_FNAME_LEN];
+	char fname[MAX_FNAME_LEN] = {0};
 	STATE retVal = DONE;
+
+	if (DEBUG_FLAG && ((recvLen - BUFF_SIZE) > 100))
+	{
+		fprintf(stderr, "FNAME_ERROR: filename is greater than 100 characters, this should never happen!\n");
+		return DONE;
+	}
 
 	// extract header size on packet for sending data and filename
 	memcpy(buffSize, buff, BUFF_SIZE);
 	*buffSize = ntohl(*buffSize);
-	memcpy(fname, &buff[sizeof(*buffSize)], recvLen - BUFF_SIZE); // <~!*> recvLen - BUFF_SIZE should never be larger than MAX_FNAME_LEN
 
-	// create client socket for each particular client
+	if (DEBUG_FLAG) {printf("\n{DEBUG} Received packet size: %d\n{DEBUG}Received buffSize: %d\n\n", recvLen, *buffSize);}
+
+	memcpy(fname, &buff[sizeof(*buffSize)], recvLen - BUFF_SIZE); // <~!*> recvLen - BUFF_SIZE should never be larger than MAX_FNAME_LEN
+	fname[recvLen - BUFF_SIZE] = '\0';
+
+	// create client socket for each particular client within child server
 	client->socketNum = safeGetUdpSocket();
+
+//~!*
+// Print client remote address info
+	char addrStr[INET6_ADDRSTRLEN];
+	void *addrPtr = NULL;
+	uint16_t port = 0;
+
+	if (client->remote.sin6_family == AF_INET6) {
+		addrPtr = &client->remote.sin6_addr;
+		port = ntohs(client->remote.sin6_port);
+	} else {
+		// fallback for IPv4-mapped IPv6 addresses
+		addrPtr = &((struct sockaddr_in *)&client->remote)->sin_addr;
+		port = ntohs(((struct sockaddr_in *)&client->remote)->sin_port);
+	}
+
+	inet_ntop(AF_INET6, addrPtr, addrStr, sizeof(addrStr));
+	printf("\n{DEBUG} Client connected from [%s]:%d\n\n", addrStr, port);
+//~!*
 
 	// if fname found send fname ok flag, else send fname bad flag
 	if (((*dataFile) = open(fname, O_RDONLY)) < 0)
@@ -321,6 +349,5 @@ int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)
 void reapZombies(int sig)
 {
 	int status = 0;
-	while (waitpid(-1, &status, WNOHANG) > 0)
-		;
+	while (waitpid(-1, &status, WNOHANG) > 0);
 }
