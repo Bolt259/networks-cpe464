@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 
 	serverSock = udpServerSetup(portNumber);
 
-	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_OFF);
+	sendtoErr_init(errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);	// TODO: turn RSEED_ON for turn in
 
 	serverTransfer(serverSock);
 
@@ -77,7 +77,8 @@ void serverTransfer(int serverSock)
 	// to connect and processes their requests in a forked child process.
 	pid_t pid = 0;
 	uint8_t buff[MAX_PACK_LEN] = {0};
-	Connection *client = (Connection *)calloc(1, sizeof(Connection));
+	Connection * client = (Connection *)calloc(1, sizeof(Connection));
+	client->addrLen = sizeof(client->remote);	// this line took me probably 7 hours to add and fix AHHHHHHH
 	uint8_t flag = 0;
 	uint32_t seqNum = 0;
 	int32_t recvLen = 0;
@@ -102,6 +103,10 @@ void serverTransfer(int serverSock)
 			}
 			if (pid == 0)
 			{
+				// //~!*
+				// printf("Press Enter to continue into child process...\n");
+				// getchar(); // wait for user input to debug
+
 				// child process
 				printf("Child fork() - child pid: %d\n", getpid());
 				processClient(serverSock, buff, recvLen, client);
@@ -147,6 +152,7 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 			state = timeoutOnEofAck(client, packet, packetLen);
 			break;
 		case DONE:
+			// free(client);	// free each child's Connection struct
 			break;
 		default:
 			printf("ERROR - In default state (processClient)\n");
@@ -169,21 +175,38 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 		return DONE;
 	}
 
+	if (client->addrLen > sizeof(client->remote))
+	{
+		fprintf(stderr, "Error: client addrlen from recvfrom call exceeds expected size.\n");
+		return DONE;
+		// ~!* maybe free(client) here?
+	}
+
 	// extract header size on packet for sending data and filename
 	memcpy(buffSize, buff, BUFF_SIZE);
 	*buffSize = ntohl(*buffSize);
 
-	if (DEBUG_FLAG) {printf("\n{DEBUG} Received packet size: %d\n{DEBUG}Received buffSize: %d\n\n", recvLen, *buffSize);}
+	if (DEBUG_FLAG)
+	{
+		printf(
+			"\n{DEBUG} Received packet size: %d\
+			\n{DEBUG} Received buffSize: %d\n\
+			{DEBUG} Zero client sockNum for server to set: %d\n\
+			{DEBUG} Client port: %d\n",
+			recvLen, *buffSize, client->socketNum, client->remote.sin6_port);
+	}
 
-	memcpy(fname, &buff[sizeof(*buffSize)], recvLen - BUFF_SIZE); // <~!*> recvLen - BUFF_SIZE should never be larger than MAX_FNAME_LEN
+	memcpy(fname, &buff[sizeof(*buffSize)], recvLen - BUFF_SIZE); // <~!*> (recvLen - BUFF_SIZE) should never be larger than MAX_FNAME_LEN
 	fname[recvLen - BUFF_SIZE] = '\0';
 
-	// create client socket for each particular client within child server
+	//~!* - create client socket for each particular client within child server
 	client->socketNum = safeGetUdpSocket();
+
+	if (DEBUG_FLAG) {printf("{DEBUG} New client sockNum for server to use: %d\n", client->socketNum);}
 
 //~!*
 // Print client remote address info
-	char addrStr[INET6_ADDRSTRLEN];
+	char addrStr[INET6_ADDRSTRLEN] = {0};
 	void *addrPtr = NULL;
 	uint16_t port = 0;
 
@@ -232,11 +255,13 @@ STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
 	case 0:
 		// end of file, send EOF packet
 		(*packetLen) = sendBuff(dataBuff, 1, client, END_OF_FILE, *seqNum, packet);
+		(*seqNum)++;
 		retVal = WAIT_ON_EOF_ACK;
 		break;
 	default:
 		// send data packet
 		(*packetLen) = sendBuff(dataBuff, lenRead, client, DATA, *seqNum, packet);
+		(*seqNum)++;
 		retVal = WAIT_ON_ACK;
 		break;
 	}

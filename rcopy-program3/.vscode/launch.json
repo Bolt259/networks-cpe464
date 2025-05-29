@@ -5,6 +5,54 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "(gdb) testServer",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/testServer",
+            "args": ["0", "44444"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) testClient",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/testClient",
+            "args": ["0", "localhost", "44444"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
             "name": "(gdb) child server",
             "type": "cppdbg",
             "request": "attach",
@@ -28,7 +76,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/rcopy",
-        "args": ["test.pdf", "downloadTestDBG.pdf", "10", "1000", ".1", "localhost", "40000"],
+        "args": ["test.pdf", "downloadTestDBG.pdf", "10", "1000", "0", "localhost", "40000"],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "environment": [],
@@ -52,7 +100,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/server",
-            "args": [".1", "40000"],
+            "args": ["0", "40000"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

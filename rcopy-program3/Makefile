@@ -16,7 +16,7 @@ LIBS += libcpe464.2.21.a -lstdc++ -ldl
 CFLAGS += -D__LIBCPE464_
 
 
-all: udpAll
+all: udpAll testClient testServer
 
 udpAll: rcopy server
 tcpAll: myClient myServer
@@ -27,11 +27,11 @@ rcopy: rcopy.c $(OBJS)
 server: server.c $(OBJS) 
 	$(CC) $(CFLAGS) -o server server.c  $(OBJS) $(LIBS)
 
-myClient: myClient.c $(OBJS)
-	$(CC) $(CFLAGS) -o myClient myClient.c  $(OBJS) $(LIBS)
+testClient: testClient.c $(OBJS)
+	$(CC) $(CFLAGS) -o testClient testClient.c  $(OBJS) $(LIBS)
 
-myServer: myServer.c $(OBJS)
-	$(CC) $(CFLAGS) -o myServer myServer.c $(OBJS) $(LIBS)
+testServer: testServer.c $(OBJS)
+	$(CC) $(CFLAGS) -o testServer testServer.c $(OBJS) $(LIBS)
 
 # .c.o:
 # 	gcc -c $(CFLAGS) $< -o $@ $(LIBS)
@@ -42,7 +42,7 @@ cleano:
 	rm -f *.o
 
 clean:
-	rm -f myServer myClient rcopy server *.o
+	rm -f testServer testClient rcopy server *.o
 
 
 

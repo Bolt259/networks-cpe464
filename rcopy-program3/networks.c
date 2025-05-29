@@ -278,11 +278,19 @@ int safeSendTo(uint8_t * buff, int len, Connection * to)
 int safeRecvFrom(int recvSockNum, uint8_t * buff, int len, Connection * from)
 {
 	int returnValue = 0;
-	if ((returnValue = recvfrom(recvSockNum, buff, (size_t) len, 0, (struct sockaddr *) &(from->remote), &(from->addrLen))) < 0)
+	if ((returnValue = recvfrom(recvSockNum, buff, (size_t) len, 0,(struct sockaddr *) &(from->remote), &(from->addrLen))) < 0)
 	{
 		perror("recvfrom: ");
 		exit(-1);
 	}
+
+	//~!*
+	// Print client remote address, address length, and port
+	char ipString[INET6_ADDRSTRLEN];
+	inet_ntop(AF_INET6, &from->remote.sin6_addr, ipString, sizeof(ipString));
+	printf("\n{DEBUG} Sender remote addr: %s, addr len: %d, port: %d\n\n",
+		ipString, from->addrLen, ntohs(from->remote.sin6_port));
+	//~!*
 	
 	return returnValue;
 }
