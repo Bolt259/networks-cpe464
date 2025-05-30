@@ -119,6 +119,8 @@ int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
         fprintf(stderr, "Error: Failed to allocate memory for packet in pane.\n");
         return -1;
     }
+    // set the most recently added pane to current packet
+    win->curr = seqNum;
 
     memcpy(pane->packet, packet, packetLen);
     pane->packetLen = packetLen;
@@ -157,10 +159,27 @@ int markPaneAck(uint32_t ackedSeqNum)
     return -1;
 }
 
+int checkPaneAck(uint32_t seqNum)
+{
+    if (win == NULL || seqNum < win->lower || seqNum >= win->lower + win->winSize)
+    {
+        fprintf(stderr, "Error: Invalid window or sequence number for checking ACK.\n");
+        return -1;
+    }
+
+    uint32_t idx = seqNum % win->winSize;
+    Pane *pane = &win->paneBuff[idx];
+    if (pane->occupied && pane->seqNum == seqNum)
+    {
+        return pane->ack;
+    }
+    return -1;
+}
+
 // slide window up to a new lower bound
 void slideWindow(uint32_t newLow)
 {
-    if (win == NULL || newLow < win->lower || newLow >= win->curr)
+    if (win == NULL || newLow < win->lower || newLow > win->curr)
     {
         fprintf(stderr, "Error: Invalid window or new base.\n");
         return;
@@ -191,7 +210,7 @@ void slideWindow(uint32_t newLow)
 // resend panes starting from seqNum
 Pane *resendPanes(uint32_t seqNum)
 {
-    if (win == NULL || seqNum < win->lower || seqNum >= win->curr)
+    if (win == NULL || seqNum < win->lower || seqNum > win->curr)
     {
         fprintf(stderr, "Error: Invalid window or sequence number for resending panes.\n");
         return NULL;

@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+#include <sys/types.h>
 
 #define DEBUG_FLAG 1 // ~!*
 #define MAX_PANES 1073741824 // 2^30 bytes = 1 GiB - winSize must be less than this number
@@ -32,6 +34,7 @@ void freeWindow();
 
 int addPane(uint8_t *packet, int packetLen, uint32_t seqNum);
 int markPaneAck(uint32_t ackedSeqNum);
+int checkPaneAck(uint32_t seqNum);
 void slideWindow(uint32_t newLow);
 
 Pane *resendPanes(uint32_t seqNum);

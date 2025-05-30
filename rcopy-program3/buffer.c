@@ -45,7 +45,7 @@ void initPacketBuffer(uint32_t winSize)
 // self explanatory
 void freePacketBuffer()
 {
-    if (pb == NULL)
+        if (pb == NULL)
     {
         fprintf(stderr, "Error: Tried to free a NULL packet buffer.\n");
         return;
@@ -70,9 +70,9 @@ void freePacketBuffer()
 
     if (DEBUG_FLAG)
     {
-        printf("Packet buffer freed successfully.\n");
+         printf("Packet buffer freed successfully.\n");
     }
-}
+ }
 
 // add a packet to the buffer
 int addPacket(uint8_t *packet, int packetLen, uint32_t seqNum)

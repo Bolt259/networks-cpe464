@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+#include <sys/types.h>
 
 #define DEBUG_FLAG 1         // ~!*
 #define MAX_PACKS 1073741824 // 2^30 bytes = 1 GiB - winSize must be less than this number
