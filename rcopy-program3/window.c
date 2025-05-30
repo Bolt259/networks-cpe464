@@ -1,5 +1,4 @@
 // Crude circular queue windowing library for rcopy Project 3 Networks 464 class
-// written by Lukas Shipley
 
 #include "window.h"
 
@@ -80,7 +79,7 @@ void freeWindow()
     }
 }
 
-// insert a pane into the window upon 
+// insert a pane into the window
 int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
 {
     if (win == NULL || windowFull() || packet == NULL || packetLen <= 0 ||
@@ -207,8 +206,8 @@ void slideWindow(uint32_t newLow)
     win->lower = newLow;
 }
 
-// resend panes starting from seqNum
-Pane *resendPanes(uint32_t seqNum)
+// returns the lowest unACKed pane in the window
+Pane *resendPane(uint32_t seqNum)
 {
     if (win == NULL || seqNum < win->lower || seqNum > win->curr)
     {
@@ -229,6 +228,28 @@ Pane *resendPanes(uint32_t seqNum)
 
     fprintf(stderr, "Error: Pane at index %u with sequence number %u not found or not occupied.\n", idx, seqNum);
     return NULL;
+}
+
+// get the base sequence number
+uint32_t getLowerBound()
+{
+    if (win == NULL)
+    {
+        fprintf(stderr, "Error: Window is NULL.\n");
+        return 0;
+    }
+    return win->lower;
+}
+
+// get the current sequence number
+uint32_t getCurrSeqNum()
+{
+    if (win == NULL)
+    {
+        fprintf(stderr, "Error: Window is NULL.\n");
+        return 0;
+    }
+    return win->curr;
 }
 
 // check if window is full

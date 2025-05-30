@@ -32,7 +32,7 @@ enum State
 	START,
 	FILENAME,
 	SEND_DATA,
-	WAIT_ON_ACK,
+	WAIT_ON_ACK_SREJ,
 	TIMEOUT_ON_ACK,
 	WAIT_ON_EOF_ACK,
 	TIMEOUT_ON_EOF_ACK,
@@ -46,7 +46,7 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 			   int32_t *dataFile, int32_t *buffSize);
 STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
 			   int32_t dataFile, int32_t buffSize, uint32_t *seqNum);
-STATE waitOnAck(Connection *client);
+STATE waitOnAckSrej(Connection *client);
 STATE timeoutOnAck(Connection *client, uint8_t *packet, int32_t packetLen);
 STATE waitOnEofAck(Connection *client);
 STATE timeoutOnEofAck(Connection *client, uint8_t *packet, int32_t packetLen);
@@ -104,9 +104,9 @@ void serverTransfer(int serverSock)
 			}
 			if (pid == 0)
 			{
-				// //~!*
-				// printf("Press Enter to continue into child process...\n");
-				// getchar(); // wait for user input to debug
+				//~!*
+				printf("Press Enter to continue into child process...\n");
+				getchar(); // wait for user input to debug
 
 				// child process
 				printf("Child fork() - child pid: %d\n", getpid());
@@ -140,8 +140,8 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 		case SEND_DATA:
 			state = sendData(client, packet, &packetLen, dataFile, buffSize, &seqNum);
 			break;
-		case WAIT_ON_ACK:
-			state = waitOnAck(client);
+		case WAIT_ON_ACK_SREJ:
+			state = waitOnAckSrej(client);
 			break;
 		case TIMEOUT_ON_ACK:
 			state = timeoutOnAck(client, packet, packetLen);
@@ -153,7 +153,16 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 			state = timeoutOnEofAck(client, packet, packetLen);
 			break;
 		case DONE:
-			// free(client);	// free each child's Connection struct
+			if (dataFile > 0)
+			{
+				close(dataFile);
+			}
+			freeWindow();
+			if (client->socketNum > 0)
+			{
+				close(client->socketNum);
+			}
+			free(client);	// free each child's Connection struct
 			break;
 		default:
 			printf("ERROR - In default state (processClient)\n");
@@ -169,6 +178,7 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 	uint8_t response[1];
 	char fname[MAX_FNAME_LEN] = {0};
 	STATE retVal = DONE;
+	uint32_t winSize = 0;
 
 	if (DEBUG_FLAG && ((recvLen - BUFF_SIZE) > 100))
 	{
@@ -183,8 +193,10 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 		// ~!* maybe free(client) here?
 	}
 
-	// extract header size on packet for sending data and filename
-	memcpy(buffSize, buff, BUFF_SIZE);
+	// extract window size and number of packets in flight
+	memcpy(&winSize, buff, BUFF_SIZE);
+	winSize = ntohl(winSize);
+	memcpy(buffSize, &buff[BUFF_SIZE], BUFF_SIZE);
 	*buffSize = ntohl(*buffSize);
 
 	if (DEBUG_FLAG)
@@ -192,13 +204,19 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 		printf(
 			"\n{DEBUG} Received packet size: %d\
 			\n{DEBUG} Received buffSize: %d\n\
+			\n{DEBUG} Received window size: %d\n\
 			{DEBUG} Zero client sockNum for server to set: %d\n\
 			{DEBUG} Client port: %d\n",
-			recvLen, *buffSize, client->socketNum, client->remote.sin6_port);
+			recvLen, *buffSize, winSize, client->socketNum, client->remote.sin6_port);
 	}
 
-	memcpy(fname, &buff[sizeof(*buffSize)], recvLen - BUFF_SIZE); // <~!*> (recvLen - BUFF_SIZE) should never be larger than MAX_FNAME_LEN
-	fname[recvLen - BUFF_SIZE] = '\0';
+	if (recvLen < (2 * BUFF_SIZE) || recvLen > MAX_PACK_LEN)
+	{
+		fprintf(stderr, "FNAME_ERROR: recvLen is less than 8 bytes or greater than %d bytes, this should never happen!\n", MAX_PACK_LEN);
+		return DONE;
+	}
+	memcpy(fname, &buff[2 * BUFF_SIZE], recvLen - BUFF_SIZE); // <~!*> (recvLen - 2 * BUFF_SIZE) should never be larger than MAX_FNAME_LEN
+	fname[recvLen - WIN_BUFF_LEN] = '\0';
 
 	//~!* - create client socket for each particular client within child server
 	client->socketNum = safeGetUdpSocket();
@@ -239,40 +257,138 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 	else
 	{
 		sendBuff(response, 0, client, FNAME_OK, 0, buff);
+		initWindow(winSize);
 		retVal = SEND_DATA;
 	}
 	return retVal;
 }
 
 STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
-			   int32_t dataFile, int32_t buffSize, uint32_t *seqNum)
+               int32_t dataFile, int32_t buffSize, uint32_t *seqNum)
 {
-	uint8_t dataBuff[MAX_PAYLOAD] = {0};
-	int32_t lenRead = 0;
-	STATE retVal = DONE;
+    uint8_t dataBuff[MAX_PAYLOAD] = {0};
+    int32_t lenRead = 0;
 
-	lenRead = read(dataFile, dataBuff, buffSize);
+    // Fill window
+    while (!windowFull())
+    {
+        lenRead = read(dataFile, dataBuff, buffSize);
+        if (lenRead <= 0)
+        {
+            // EOF or error
+            if (lenRead == 0)
+            {
+                *packetLen = sendBuff(dataBuff, 1, client, END_OF_FILE, *seqNum, packet);
+                (*seqNum)++;
+                return WAIT_ON_EOF_ACK;
+            }
+            else
+            {
+                perror("sendData, read error");
+                return DONE;
+            }
+        }
 
-	switch (lenRead)
-	{
-	case -1:
-		perror("sendData, read error");
-		retVal = DONE;
-		break;
-	case 0:
-		// end of file, send EOF packet
-		(*packetLen) = sendBuff(dataBuff, 1, client, END_OF_FILE, *seqNum, packet);
-		(*seqNum)++;
-		retVal = WAIT_ON_EOF_ACK;
-		break;
-	default:
-		// send data packet
-		(*packetLen) = sendBuff(dataBuff, lenRead, client, DATA, *seqNum, packet);
-		(*seqNum)++;
-		retVal = WAIT_ON_ACK;
-		break;
+        addPane(dataBuff, lenRead, *seqNum);
+        *packetLen = sendBuff(dataBuff, lenRead, client, DATA, *seqNum, packet);
+        (*seqNum)++;
+
+        // Non-blocking poll for ACK_RR/SREJ after each send
+        if (selectCall(client->socketNum, 0, 0) == 1)
+        {
+            uint8_t flag = 0;
+            uint32_t ackSeqNum = 0;
+            int32_t recvLen = recvBuff(packet, MAX_PACK_LEN, client->socketNum, client, &flag, &ackSeqNum);
+            if (recvLen > 0)
+            {
+                if (flag == ACK_RR)
+                {
+                    markPaneAck(ackSeqNum);
+                    slideWindow(ackSeqNum + 1);
+                }
+                else if (flag == SREJ)
+                {
+                    Pane *pane = resendPane(ackSeqNum);
+                    if (pane)
+                        sendBuff(pane->packet, pane->packetLen, client, DATA, pane->seqNum, packet);
+                }
+            }
+        }
+    }
+
+    // Window is full: block for 1s waiting for ACK_RR/SREJ
+    if (windowFull())
+    {	// do recvBuff here and check for ACK_RR or SREJ or call waitOnAckSrej------------------^
+		uint8_t flag = 0;
+		uint32_t ackSeqNum = 0;
+		int32_t recvLen = recvBuff(packet, MAX_PACK_LEN, client->socketNum, client, &flag, &ackSeqNum);
+		if (recvLen > 0)
+		{
+			if (flag == ACK_RR)
+			{
+				markPaneAck(ackSeqNum);
+				slideWindow(ackSeqNum + 1);
+			}
+			else if (flag == SREJ)
+			{
+				Pane *pane = resendPane(ackSeqNum);
+				if (pane)
+					sendBuff(pane->packet, pane->packetLen, client, DATA, pane->seqNum, packet);
+			}
+		}
+		else if (recvLen < 0 && recvLen != CRC_ERROR)
+		{
+			return WAIT_ON_ACK_SREJ;
+		}
 	}
-	return retVal;
+	return SEND_DATA;
+
+// //
+//         if (selectCall(client->socketNum, 1, 0) == 1)
+//         {
+// 			// client has sent ACK_RR or SREJ
+//             uint8_t flag = 0;
+//             uint32_t ackSeqNum = 0;
+//             int32_t recvLen = recvBuff(packet, MAX_PACK_LEN, client->socketNum, client, &flag, &ackSeqNum);
+//             if (recvLen > 0)
+//             {
+//                 if (flag == ACK_RR)
+//                 {
+//                     markPaneAck(ackSeqNum);
+//                     slideWindow(ackSeqNum + 1);
+//                     retryCnt = 0;
+//                 }
+//                 else if (flag == SREJ)
+//                 {
+//                     Pane *pane = resendPane(ackSeqNum);
+//                     if (pane)
+//                         sendBuff(pane->packet, pane->packetLen, client, DATA, pane->seqNum, packet);
+//                 }
+//             }
+//         }
+//         else
+//         {
+// 			// after 1s timeout: resend all unacked panes
+// 			uint32_t resendSeq = getLowerBound();
+// 			while (resendSeq < getCurrSeqNum()) {
+// 				Pane *pane = resendPane(resendSeq);
+// 				if (pane && !pane->ack) {
+// 					sendBuff(pane->packet, pane->packetLen, client, DATA, pane->seqNum, packet);
+// 				}
+// 				resendSeq++;
+// 			}
+//             retryCnt++;
+//             if (retryCnt > 10)
+//             {
+//                 fprintf(stderr, "No ACK/SREJ after 10 tries, terminating connection.\n");
+//                 return DONE;
+//             }
+//         }
+//     }
+
+//     return SEND_DATA;
+// //
+
 }
 
 STATE waitOnEofAck(Connection *client)
@@ -308,7 +424,7 @@ STATE waitOnEofAck(Connection *client)
 	return retVal;
 }
 
-STATE waitOnAck(Connection *client)
+STATE waitOnAckSrej(Connection *client)
 {
 	STATE retVal = DONE;
 	uint32_t crcCheck = 0;
@@ -324,12 +440,26 @@ STATE waitOnAck(Connection *client)
 		// if crc error ignore packet
 		if (crcCheck == CRC_ERROR)
 		{
-			retVal = WAIT_ON_ACK;
+			retVal = WAIT_ON_ACK_SREJ;
 		}
-		else if (flag != ACK_RR)
+		else if (flag != ACK_RR && flag != SREJ)
 		{
 			printf("In wait_on_ack but its not an ACK_RR flag (this should never happen) is: %d\n", flag);
 			retVal = DONE;
+		}
+	}
+	else if (retVal == TIMEOUT_ON_ACK)
+	{
+		// timeout and window full -> resent all unacked panes
+		uint32_t resendSeq = getLowerBound();
+		while (resendSeq < getCurrSeqNum())
+		{
+			Pane *pane = resendPane(resendSeq);
+			if (pane && !pane->ack)
+			{
+				sendBuff(pane->packet, pane->packetLen, client, SREJ_DATA, pane->seqNum, buff);
+			}
+			resendSeq++;
 		}
 	}
 	return retVal;
@@ -337,17 +467,68 @@ STATE waitOnAck(Connection *client)
 
 STATE timeoutOnAck(Connection *client, uint8_t *packet, int32_t packetLen)
 {
-	safeSendTo(packet, packetLen, client);
+	sendBuff(packet, packetLen, client, TIMEOUT_DATA, 0, packet);
 
-	return WAIT_ON_ACK;
+	return WAIT_ON_ACK_SREJ;
 }
 
 STATE timeoutOnEofAck(Connection *client, uint8_t *packet, int32_t packetLen)
 {
-	safeSendTo(packet, packetLen, client);
+	sendBuff(packet, packetLen, client, END_OF_FILE, 0, packet);
 
 	return WAIT_ON_EOF_ACK;
 }
+
+// STATE exportPane(Connection *client, int32_t dataFile, uint8_t *packet, int32_t *packetLen, uint8_t *dataBuff, int32_t lenRead, int32_t buffSize, uint32_t *seqNum, int retryCnt)
+// {
+// 	lenRead = read(dataFile, dataBuff, buffSize);
+// 	if (lenRead <= 0)
+// 	{
+// 		// EOF or error
+// 		if (lenRead == 0)
+// 		{
+// 			*packetLen = sendBuff(dataBuff, 1, client, END_OF_FILE, *seqNum, packet);
+// 			(*seqNum)++;
+// 			retryCnt = 0;
+// 			return WAIT_ON_EOF_ACK;
+// 		}
+// 		else
+// 		{
+// 			perror("sendData, read error");
+// 			return DONE;
+// 		}
+// 	}
+
+// 	addPane(dataBuff, lenRead, *seqNum);
+// 	*packetLen = sendBuff(dataBuff, lenRead, client, DATA, *seqNum, packet);
+// 	(*seqNum)++;
+
+// 	// non-blocking poll for ACK_RR or SREJ after each send -> recv and resend if needed
+// 	if (selectCall(client->socketNum, 0, 0) == 1)
+// 	{
+// 		uint8_t flag = 0;
+// 		uint32_t ackedSeqNum = 0;
+// 		int32_t recvLen = recvBuff(packet, MAX_PACK_LEN, client->socketNum, client, &flag, &ackedSeqNum);
+// 		if (recvLen > 0)
+// 		{
+// 			if (flag == ACK_RR)
+// 			{
+// 				markPaneAck(ackedSeqNum);
+// 				slideWindow(ackedSeqNum + 1);
+// 				retryCnt = 0;
+// 			}
+// 			else if (flag == SREJ)
+// 			{
+// 				Pane *pane = resendPane(ackedSeqNum);
+// 				if (pane)
+// 				{
+// 					sendBuff(pane->packet, pane->packetLen, client, SREJ_DATA, pane->seqNum, packet);
+// 					(*seqNum) = pane->seqNum + 1;
+// 				}
+// 			}
+// 		}
+// 	}
+// }
 
 // usage: server <error rate> [port number]
 int checkArgs(int argc, char *argv[], float *errorRate, int *portNumber)

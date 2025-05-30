@@ -41,9 +41,9 @@ enum State
 
 void transferFile(char *argv[]);
 STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum);
-STATE filename(char *fname, int32_t buf_size, Connection *server);
-STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum);
-STATE file_ok(int *outFileFd, char *outFileName);
+STATE filename(char *fname, Connection *server);
+STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum, uint32_t winSize);
+STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize);
 void checkArgs(int argc, char *argv[], float *errorRate);
 
 int main(int argc, char *argv[])
@@ -71,6 +71,7 @@ void transferFile(char *argv[])
     STATE state = START;
     int outFileFd = 0;
     uint32_t clientSeqNum = 0;
+    uint32_t winSize = atoi(argv[3]);
 
     while (state != DONE)
     {
@@ -80,13 +81,13 @@ void transferFile(char *argv[])
             state = start_state(argv, server, &clientSeqNum);
             break;
         case FILENAME:
-            state = filename(argv[1], atoi(argv[4]), server);
+            state = filename(argv[1], server);
             break;
         case FILE_OK:
-            state = file_ok(&outFileFd, argv[2]);
+            state = file_ok(&outFileFd, argv[2], winSize);
             break;
         case RECV_DATA:
-            state = recvData(outFileFd, server, &clientSeqNum);
+            state = recvData(outFileFd, server, &clientSeqNum, winSize);
             break;
         case DONE:
             if (outFileFd > 0)
@@ -110,7 +111,9 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
     char *hostname = argv[6];
     int portNumber = atoi(argv[7]);
     STATE retVal = FILENAME;
-    uint32_t bufferLen = 0;
+    uint32_t winSize = htonl(atoi(argv[3]));
+    int32_t bufferLen = htonl(atoi(argv[4]));
+    int len = 0;
 
     // check if fileNameLen is too long
     if (fileNameLen >= MAX_FNAME_LEN)
@@ -136,43 +139,22 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
     }
     else
     {
-        // build PDU (filename packet flag = 9) -> [bufferLen (4 bytes)][fileName (MAX_FNAME_LEN bytes)]
-        bufferLen = htonl(atoi(argv[4]));
-        memcpy(buffer, &bufferLen, BUFF_SIZE);
-        memcpy(&buffer[BUFF_SIZE], argv[1], fileNameLen);
+        // build fname PDU [winSize (4 bytes)] [bufferLen (4 bytes)] [fileName (MAX_FNAME_LEN bytes)]
+        memcpy(buffer, &winSize, BUFF_SIZE);
+        memcpy(&buffer[BUFF_SIZE], &bufferLen, BUFF_SIZE);
+        memcpy(&buffer[WIN_BUFF_LEN], argv[1], fileNameLen);
         printIPInfo(&server->remote);
 
-        //~!* Debugging output to show server remote address info
-        // Print server remote address info
-        char addrStr[INET6_ADDRSTRLEN];
-        void *addrPtr = NULL;
-        uint16_t port = 0;
-
-        if (server->remote.sin6_family == AF_INET6)
-        {
-            addrPtr = &server->remote.sin6_addr;
-            port = ntohs(server->remote.sin6_port);
-        }
-        else
-        {
-            // fallback for IPv4-mapped IPv6 addresses
-            addrPtr = &((struct sockaddr_in *)&server->remote)->sin_addr;
-            port = ntohs(((struct sockaddr_in *)&server->remote)->sin_port);
-        }
-
-        inet_ntop(AF_INET6, addrPtr, addrStr, sizeof(addrStr));
-        printf("\n{DEBUG} Server connected from [%s]:%d\n\n", addrStr, port);
-        //~!*
-
         // send packet to server with filename
-        sendBuff(buffer, BUFF_SIZE + fileNameLen, server, FNAME, *clientSeqNum, packet);
+        len = WIN_BUFF_LEN + fileNameLen;
+        sendBuff(buffer, len, server, FNAME, *clientSeqNum, packet);
         (*clientSeqNum)++;
     }
 
     return retVal;
 }
 
-STATE filename(char *fname, int32_t buf_size, Connection *server)
+STATE filename(char *fname, Connection *server)
 {
     // get server response
     // returns START if no reply, DONE if bad filename, FILE_OK otherwise
@@ -206,7 +188,7 @@ STATE filename(char *fname, int32_t buf_size, Connection *server)
     return retVal;
 }
 
-STATE file_ok(int *outFileFd, char *outFileName)
+STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize)
 {
     STATE retVal = DONE;
 
@@ -218,11 +200,13 @@ STATE file_ok(int *outFileFd, char *outFileName)
     else
     { // file opened and ready to receive data
         retVal = RECV_DATA;
+        initPacketBuffer(winSize, *outFileFd);
+
     }
     return retVal;
 }
 
-STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum)
+STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum, uint32_t winSize)
 {
     uint32_t seqNum = 0;
     uint32_t ackSeqNum = 0;
@@ -230,7 +214,7 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum)
     int32_t dataLen = 0;
     uint8_t dataBuff[MAX_PACK_LEN];
     uint8_t packet[MAX_PACK_LEN];
-    static int32_t expectedSeqNum = START_SEQ_NUM;
+    static int32_t expectedSeqNum = START_SEQ_NUM;  // hold value outside of this function
 
     if (selectCall(server->socketNum, LONG_TIME, 0) == 0)
     {
@@ -250,24 +234,38 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum)
         // send ACK_RR
         sendBuff(packet, 1, server, EOF_ACK, *clientSeqNum, packet);
         (*clientSeqNum)++;
-        printf("File done\n");
+        freePacketBuffer();
+        if (DEBUG_FLAG) printf("File done\n");
         return DONE;
     }
-    else
+    else if (flag == DATA || flag == SREJ_DATA || flag == TIMEOUT_DATA)
     {
-        // send ACK_RR
+        addPacket(dataBuff, dataLen, seqNum);
+        markPacketReceived(seqNum);
+
+        if (seqNum > expectedSeqNum)
+        {
+            // out of order packet -> send SREJ
+            ackSeqNum = htonl(expectedSeqNum);
+            sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, SREJ, *clientSeqNum, packet);
+            (*clientSeqNum)++;
+            return RECV_DATA;
+        }
+        else if (seqNum == expectedSeqNum)
+        {
+            flushBuffer(); // write packets to file and slide window
+            expectedSeqNum++;
+        }
+        // either alr written or just received this packet -> send ACK_RR
         ackSeqNum = htonl(seqNum);
         sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK_RR, *clientSeqNum, packet);
         (*clientSeqNum)++;
     }
-
-    if (seqNum == expectedSeqNum)
+    else
     {
-        // write data to file
-        write(outFile, &dataBuff, dataLen);
-        expectedSeqNum++;
+        fprintf(stderr, "ERROR - recvData: received unexpected flag %d\n", flag);
+        return DONE;
     }
-
     return RECV_DATA;
 }
 

@@ -37,7 +37,9 @@ int markPaneAck(uint32_t ackedSeqNum);
 int checkPaneAck(uint32_t seqNum);
 void slideWindow(uint32_t newLow);
 
-Pane *resendPanes(uint32_t seqNum);
+Pane *resendPane(uint32_t seqNum);
+uint32_t getLowerBound();
+uint32_t getCurrSeqNum();
 
 int windowFull(); // 1 = full, 0 = not full
 

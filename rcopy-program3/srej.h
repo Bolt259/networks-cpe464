@@ -26,6 +26,7 @@
 
 #define MAX_PACK_LEN 1500
 #define BUFF_SIZE 4
+#define WIN_BUFF_LEN 8
 #define START_SEQ_NUM 1
 #define MAX_TRIES 10
 #define LONG_TIME 10

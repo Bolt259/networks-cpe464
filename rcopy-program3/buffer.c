@@ -1,5 +1,4 @@
 // Crude circular queue buffering library for rcopy Project 3 Networks 464 class
-// written by Lukas Shipley
 
 #include "buffer.h"
 
@@ -9,11 +8,11 @@ PacketBuffer *pb = NULL;
 // func defs start
 
 // setup packet buffer
-void initPacketBuffer(uint32_t winSize)
+void initPacketBuffer(uint32_t winSize, int outFileFd)
 {
-    if (pb != NULL || winSize > MAX_PACKS)
+    if (pb != NULL || winSize > MAX_PACKS || winSize == 0 || outFileFd < 0)
     {
-        fprintf(stderr, "Error: Invalid packet buffer or window size exceeds maximum.\n");
+        fprintf(stderr, "Error: Invalid packet buffer or window size or output file descriptor.\n");
         return;
     }
 
@@ -35,6 +34,7 @@ void initPacketBuffer(uint32_t winSize)
 
     pb->nextSeqNum = 0;
     pb->winSize = winSize;
+    pb->outFileFd = outFileFd;
 
     if (DEBUG_FLAG)
     {
@@ -154,6 +154,39 @@ int getPacket(uint8_t *packet, int *packetLen, uint32_t seqNum)
     }
 
     return 0; // success
+}
+
+// flush the buffer to the output file
+int flushBuffer()
+{
+    if (pb == NULL)
+    {
+        fprintf(stderr, "Error: Packet buffer is NULL.\n");
+        return -1;
+    }
+    // write all packets that have been received and not written to the output file up to nextSeqNum
+    while (1)
+    {
+        uint32_t idx = pb->nextSeqNum % pb->winSize;
+        Packet *pkt = &pb->buffer[idx];
+
+        if (pkt->packetData && pkt->recv && !pkt->written)
+        {
+            int bytesWritten = write(pb->outFileFd, pkt->packetData, pkt->packetLen);
+            if (bytesWritten < 0)
+            {
+                perror("Error flushing to output file");
+                return -1;
+            }
+            pkt->written = 1; // mark as written
+            pb->storedPackets--;
+            pb->nextSeqNum++;
+        }
+        else
+        {
+            return 0;
+        }
+    }
 }
 
 // mark a packet as received
