@@ -42,16 +42,25 @@ typedef struct header
 
 enum FLAG
 {
-    ACK=5, SREJ=6, FNAME=8, FNAME_OK=9, END_OF_FILE=10, DATA=16, SREJ_DATA=17,
-    TIMEOUT_DATA=18, FNAME_BAD=32, EOF_ACK=33, CRC_ERROR=-1
+    ACK_RR = 5,
+    SREJ = 6,
+    FNAME = 8,
+    FNAME_OK = 9,
+    END_OF_FILE = 10,
+    DATA = 16,
+    SREJ_DATA = 17,
+    TIMEOUT_DATA = 18,
+    FNAME_BAD = 32,
+    EOF_ACK = 33,
+    CRC_ERROR = -1
 };
 
-int32_t sendBuff(uint8_t * buff, uint32_t len, Connection * connection,
-    uint8_t flag, uint32_t seqNum, uint8_t * packet);
-int createHeader(uint32_t len, uint8_t flag, uint32_t seqNum, uint8_t * packet);
-int32_t recvBuff(uint8_t * buff, int32_t len, int32_t recvSockNum,
-    Connection * connection, uint8_t * flag, uint32_t * seqNum);
-int retrieveHeader(uint8_t * dataBuff, int recvLen, uint8_t * flag, uint32_t * seqNum);
-int processSelect(Connection * client, int * retryCnt, int selectTimeoutState, int dataReadyState, int doneState);
+int32_t sendBuff(uint8_t *buff, uint32_t len, Connection *connection,
+                 uint8_t flag, uint32_t seqNum, uint8_t *packet);
+int createHeader(uint32_t len, uint8_t flag, uint32_t seqNum, uint8_t *packet);
+int32_t recvBuff(uint8_t *buff, int32_t len, int32_t recvSockNum,
+                 Connection *connection, uint8_t *flag, uint32_t *seqNum);
+int retrieveHeader(uint8_t *dataBuff, int recvLen, uint8_t *flag, uint32_t *seqNum);
+int processSelect(Connection *client, int *retryCnt, int selectTimeoutState, int dataReadyState, int doneState);
 
 #endif

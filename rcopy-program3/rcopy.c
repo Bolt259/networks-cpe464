@@ -23,6 +23,7 @@
 #include "cpe464.h"
 #include "pollLib.h"
 #include "srej.h"
+#include "buffer.h"
 
 #define MAX_PACK_LEN 1500
 #define MAX_PAYLOAD 1400
@@ -106,7 +107,7 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
     uint8_t packet[MAX_PACK_LEN] = {0};
     uint8_t buffer[MAX_PACK_LEN] = {0};
     int fileNameLen = strlen(argv[1]);
-    char* hostname = argv[6];
+    char *hostname = argv[6];
     int portNumber = atoi(argv[7]);
     STATE retVal = FILENAME;
     uint32_t bufferLen = 0;
@@ -127,7 +128,10 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
     if (udpClientSetup(hostname, portNumber, server) < 0)
     {
         // could not connect to server
-        if (DEBUG_FLAG) {fprintf(stderr, "Error: could not connect to server %s on port %d\n", hostname, portNumber);}
+        if (DEBUG_FLAG)
+        {
+            fprintf(stderr, "Error: could not connect to server %s on port %d\n", hostname, portNumber);
+        }
         retVal = DONE;
     }
     else
@@ -138,16 +142,19 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
         memcpy(&buffer[BUFF_SIZE], argv[1], fileNameLen);
         printIPInfo(&server->remote);
 
-    //~!* Debugging output to show server remote address info
+        //~!* Debugging output to show server remote address info
         // Print server remote address info
         char addrStr[INET6_ADDRSTRLEN];
         void *addrPtr = NULL;
         uint16_t port = 0;
 
-        if (server->remote.sin6_family == AF_INET6) {
+        if (server->remote.sin6_family == AF_INET6)
+        {
             addrPtr = &server->remote.sin6_addr;
             port = ntohs(server->remote.sin6_port);
-        } else {
+        }
+        else
+        {
             // fallback for IPv4-mapped IPv6 addresses
             addrPtr = &((struct sockaddr_in *)&server->remote)->sin_addr;
             port = ntohs(((struct sockaddr_in *)&server->remote)->sin_port);
@@ -155,7 +162,7 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
 
         inet_ntop(AF_INET6, addrPtr, addrStr, sizeof(addrStr));
         printf("\n{DEBUG} Server connected from [%s]:%d\n\n", addrStr, port);
-    //~!*
+        //~!*
 
         // send packet to server with filename
         sendBuff(buffer, BUFF_SIZE + fileNameLen, server, FNAME, *clientSeqNum, packet);
@@ -240,7 +247,7 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum)
     }
     if (flag == END_OF_FILE)
     {
-        // send ACK
+        // send ACK_RR
         sendBuff(packet, 1, server, EOF_ACK, *clientSeqNum, packet);
         (*clientSeqNum)++;
         printf("File done\n");
@@ -248,64 +255,18 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum)
     }
     else
     {
-        // send ACK
+        // send ACK_RR
         ackSeqNum = htonl(seqNum);
-        sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK, *clientSeqNum, packet);
+        sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK_RR, *clientSeqNum, packet);
         (*clientSeqNum)++;
     }
-    
+
     if (seqNum == expectedSeqNum)
     {
         // write data to file
         write(outFile, &dataBuff, dataLen);
         expectedSeqNum++;
-        
-        
-        // ~!* EXPERIMENTAL
-        const char *srcFilePath = "test.pdf";
-        const char *destFilePath = "testDownloadMAN.pdf";
-        
-        int srcFd = open(srcFilePath, O_RDONLY);
-        int destFd = open(destFilePath, O_RDONLY);
-        
-        if (srcFd < 0 || destFd < 0) {
-            perror("File open error for diff check");
-            return RECV_DATA;
-        }
-        
-        off_t checkBytes = seqNum * 1000;  // Check up to this many bytes
-        
-        char srcBuf[1000], destBuf[1000];
-        ssize_t sRead, dRead;
-        off_t offset = 0;
-        int diffCount = 0;
-        
-        while (offset < checkBytes) {
-            sRead = read(srcFd, srcBuf, sizeof(srcBuf));
-            dRead = read(destFd, destBuf, sizeof(destBuf));
-            
-            if (sRead <= 0 || dRead <= 0) break;
-            
-            for (int i = 0; i < sRead; i++) {
-                if (srcBuf[i] != destBuf[i]) {
-                    printf("[DIFF] Byte %ld: src=0x%02x dest=0x%02x\n",
-                        offset + i, srcBuf[i] & 0xff, destBuf[i] & 0xff);
-                        diffCount++;
-                    }
-                }
-                offset += sRead;
-            }
-            
-            if (diffCount == 0) {
-                printf("[OK] No differences up to %ld bytes (seqNum=%u)\n", checkBytes, seqNum);
-            } else {
-                printf("[WARNING] %d differences found up to %ld bytes\n", diffCount, checkBytes);
-            }
-            
-            close(srcFd);
-            close(destFd);
-        }
-        // ~!* EXPERIMENTAL
+    }
 
     return RECV_DATA;
 }

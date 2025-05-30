@@ -24,7 +24,7 @@
 #include "cpe464.h"
 #include "gethostbyname.h"
 
-#define DEBUG_FLAG 1
+#define DEBUG_FLAG 1 // ~!*
 
 #define LISTEN_BACKLOG 10
 #define MAX_FNAME_LEN 101   // including null terminator
