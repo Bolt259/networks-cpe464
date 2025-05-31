@@ -148,8 +148,7 @@ STATE start_state(char **argv, Connection *server, uint32_t *expectedSeqNum, uin
 
         // send packet to server with filename
         len = WIN_BUFF_LEN + fileNameLen;
-        sendBuff(buffer, len, server, FNAME, *expectedSeqNum, packet);
-        (*expectedSeqNum)++;
+        sendBuff(buffer, len, server, FNAME, 0, packet);
     }
 
     return retVal;

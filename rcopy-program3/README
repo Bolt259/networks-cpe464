@@ -7,3 +7,100 @@ Flag = 32 -> filename ACK_RR recv
 Flag = 33 -> EOF_ACK
 
 Wednesday and Thursday sick days
+
+
+
+
+Design Overview
+
+This program implements a Selective Reject ARQ file transfer system over UDP, featuring a sliding window protocol for the sender (server) and an out-of-order buffer for the receiver (rcopy). The design adheres to the Selective Reject ARQ protocol: rcopy sends RR (Receiver Ready) or SREJ (Selective Reject) packets, and the server resends only the specific packets requested.
+
+Design Choices
+
+Server (Sender) - Sliding Window
+
+Window Management: The server maintains a circular buffer (paneBuff) representing the window, with each pane holding packet data, sequence number, and ACK status.
+
+Packet Sending:
+
+sendData() handles a single packet send at a time (either next seqNum or a specific SREJ'd packet).
+
+After each send, pollAckSrej() (non-blocking poll(0)) checks for incoming RRs or SREJs.
+
+If the window fills, the server enters waitOnAckSrej() (blocking poll(1000)) to wait for feedback.
+
+Timeout Handling: After 1s of no response, timeoutOnAck() resends the lowest unACKed packet, as per the Selective Reject spec. This repeats up to 10 times.
+
+EOF Handling:
+
+Upon reaching EOF, the server sends an EOF packet.
+
+It then enters waitOnEofAck() to wait for an EOF_ACK from rcopy.
+
+During EOF wait, it continues handling late RRs/SREJs.
+
+rcopy (Receiver) - Out-of-Order Buffer
+
+Packet Buffer: rcopy uses a circular buffer (PacketBuffer) to store out-of-order packets, indexed by seqNum % windowSize.
+
+Receiving Logic:
+
+If seqNum == expectedSeqNum, rcopy writes directly to file, increments expectedSeqNum, and flushes contiguous packets from the buffer.
+
+If seqNum > expectedSeqNum, rcopy stores the packet and sends an SREJ for the missing expectedSeqNum.
+
+If seqNum < expectedSeqNum, rcopy ignores the packet (duplicate).
+
+Acknowledgment Strategy:
+
+rcopy sends an ACK_RR for the last in-order packet it received (i.e., expectedSeqNum - 1).
+
+rcopy sends an SREJ for the first missing packet.
+
+Key Design Decisions
+
+Window and Buffer Allocation
+
+Server Window:
+
+Pre-allocated based on windowSize.
+
+Each pane pre-allocates space for the specified amount of packet data to be sent (buffer size).
+
+Packets are overwritten only when ACKed and the window slides.
+
+rcopy Buffer:
+
+Pre-allocated based on windowSize.
+
+Stores raw packet data for out-of-order arrivals.
+
+flushBuffer() writes contiguous packets to file as they become in-order.
+
+Sequence Number Management
+
+Server:
+
+Tracks seqNum "globally" in state machine.
+
+Updates seqNum based on RR (seqNum = RR + 1) or SREJ (seqNum = SREJ).
+
+rcopy:
+
+Tracks expectedSeqNum as the next in-order packet.
+
+Timeout Strategy
+
+Server:
+
+1s timeout (poll) when window is full.
+
+Resends only the lowest unACKed packet then send data takes it from there
+
+because seqNum global is updated.
+
+Max 10 retries.
+
+rcopy:
+
+10s timeout in recvData() (poll). Terminates if no packets received for 10s.
