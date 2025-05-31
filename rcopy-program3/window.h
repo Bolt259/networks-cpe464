@@ -9,6 +9,9 @@
 #include <string.h>
 #include <sys/types.h>
 
+#include "networks.h"
+#include "srej.h"
+
 #define DEBUG_FLAG 1 // ~!*
 #define MAX_PANES 1073741824 // 2^30 bytes = 1 GiB - winSize must be less than this number
 
@@ -37,8 +40,8 @@ int markPaneAck(uint32_t ackedSeqNum);
 int checkPaneAck(uint32_t seqNum);
 void slideWindow(uint32_t newLow);
 
-Pane *resendPane(uint32_t seqNum);
-uint32_t getLowerBound();
+int32_t resendPane(Connection *client, uint8_t flag, uint32_t seqNum, uint8_t *packet);
+uint32_t getLowerBound();   // lowest unACKed sequence number
 uint32_t getCurrSeqNum();
 
 int windowOpen(); // 1 = open, 0 = closed

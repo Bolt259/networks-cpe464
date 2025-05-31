@@ -4,3 +4,6 @@ Lab Section: noon
 Added Flags:
 
 Flag = 32 -> filename ACK_RR recv
+Flag = 33 -> EOF_ACK
+
+Wednesday and Thursday sick days

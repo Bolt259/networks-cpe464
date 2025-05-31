@@ -223,28 +223,30 @@ void slideWindow(uint32_t newLow)
     win->lower = newLow;
 }
 
-// returns the lowest unACKed pane in the window
-Pane *resendPane(uint32_t seqNum)
+// resends the lowest unACKed pane in the window
+int32_t resendPane(Connection *client, uint8_t flag, uint32_t seqNum, uint8_t *packet)
 {
     if (win == NULL || seqNum < win->lower || seqNum > win->curr)
     {
         fprintf(stderr, "Error: Invalid window or sequence number for resending panes.\n");
-        return NULL;
+        return -1;
     }
 
+    int32_t packetLen = -1;
     uint32_t idx = seqNum % win->winSize;
     Pane *pane = &win->paneBuff[idx];
     if (pane->occupied && pane->ack == 0 && pane->seqNum == seqNum)
     {
+        packetLen = sendBuff(pane->packet, pane->packetLen, client, flag, seqNum, packet);
         if (DEBUG_FLAG)
         {
             printf("Resending pane at index %u with sequence number %u.\n", idx, seqNum);
         }
-        return pane;
+        return packetLen;
     }
 
     fprintf(stderr, "Error: Pane at index %u with sequence number %u not found or not occupied.\n", idx, seqNum);
-    return NULL;
+    return -1;
 }
 
 // get the base sequence number
