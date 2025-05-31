@@ -4,6 +4,7 @@
         "gethostbyname.h": "c",
         "socket.h": "c",
         "strings.h": "c",
-        "pdu.h": "c"
+        "pdu.h": "c",
+        "buffer.h": "c"
     }
 }

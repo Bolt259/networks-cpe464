@@ -29,7 +29,7 @@ typedef struct
     uint32_t curr;  // current sequence number to send
 } Window;
 
-void initWindow(uint32_t winSize);
+void initWindow(uint32_t winSize, int buffSize);
 void freeWindow();
 
 int addPane(uint8_t *packet, int packetLen, uint32_t seqNum);
@@ -41,7 +41,6 @@ Pane *resendPane(uint32_t seqNum);
 uint32_t getLowerBound();
 uint32_t getCurrSeqNum();
 
-int windowFull(); // 1 = full, 0 = not full
-
+int windowOpen(); // 1 = open, 0 = closed
 
 #endif

@@ -17,8 +17,7 @@ typedef struct
 {
     uint8_t *packetData;
     int packetLen;
-    int recv;    // 1 = received, 0 = not received
-    int written; // 1 = written, 0 = not written to file
+    int written; // 1 = written and used as invalid to flush, 0 = not written to file and valid to addPacket
 } Packet;
 
 typedef struct
@@ -30,15 +29,16 @@ typedef struct
     int outFileFd;      // file descriptor for the output file to be written to
 } PacketBuffer;
 
-void initPacketBuffer(uint32_t winSize, int outFileFd);
+void initPacketBuffer(uint32_t winSize, int32_t buffSize, int outFileFd);
 void freePacketBuffer();
 
 int addPacket(uint8_t *packet, int packetLen, uint32_t seqNum);
-int getPacket(uint8_t *packet, int *packetLen, uint32_t seqNum);
+int getPacket(uint8_t *packet, int *packetLen, uint32_t seqNum);    // X
 int flushBuffer(); // write packets to the output file and slide
 
-int markPacketReceived(uint32_t seqNum);
-int isPacketReceived(uint32_t seqNum);
-int bufferFull(); // 1 = full, 0 = not full
+int getNextSeqNum();
+int getStoredPackets();
+int bufferOpen(); // 1 = open, 0 = full
+int needFlush(); // 1 = has packets, 0 = no packets to write
 
 #endif

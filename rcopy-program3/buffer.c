@@ -8,7 +8,7 @@ PacketBuffer *pb = NULL;
 // func defs start
 
 // setup packet buffer
-void initPacketBuffer(uint32_t winSize, int outFileFd)
+void initPacketBuffer(uint32_t winSize, int32_t buffSize, int outFileFd)
 {
     if (pb != NULL || winSize > MAX_PACKS || winSize == 0 || outFileFd < 0)
     {
@@ -32,14 +32,33 @@ void initPacketBuffer(uint32_t winSize, int outFileFd)
         return;
     }
 
-    pb->nextSeqNum = 0;
-    pb->winSize = winSize;
-    pb->outFileFd = outFileFd;
-
-    if (DEBUG_FLAG)
+    // initialize each packet in the buffer
+    for (int i = 0; i < winSize; i++)
     {
-        printf("Packet buffer initialized with window size: %u\n", winSize);
+        pb->buffer[i].packetData = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
+        if (pb->buffer[i].packetData == NULL)
+        {
+            fprintf(stderr, "Error: Failed to allocate memory for packet data at index %d.\n", i);
+            // free all previously allocated packets
+            for (int j = 0; j < i; j++)
+            {
+                free(pb->buffer[j].packetData);
+                pb->buffer[j].packetData = NULL;
+            }
+            free(pb->buffer);
+            free(pb);
+            pb = NULL;
+            return;
+        }
+        pb->buffer[i].packetLen = 0;
+        pb->buffer[i].written = 1;  // mark packets as written initially meaning open for adding
     }
+
+    // initialize packet buffer metadata
+    pb->winSize = winSize;
+    pb->nextSeqNum = 1;
+    pb->storedPackets = 0;
+    pb->outFileFd = outFileFd;
 }
 
 // self explanatory
@@ -60,18 +79,19 @@ void freePacketBuffer()
             {
                 free(packet->packetData);
                 packet->packetData = NULL;
+                packet->packetLen = 0;
+                packet->written = 0;
             }
         }
         free(pb->buffer);
         pb->buffer = NULL;
+        pb->winSize = 0;
+        pb->nextSeqNum = 0;
+        pb->storedPackets = 0;
+        pb->outFileFd = -1;
     }
     free(pb);
     pb = NULL;
-
-    if (DEBUG_FLAG)
-    {
-         printf("Packet buffer freed successfully.\n");
-    }
  }
 
 // add a packet to the buffer
@@ -86,36 +106,27 @@ int addPacket(uint8_t *packet, int packetLen, uint32_t seqNum)
         }
         return -1; // invalid parameters
     }
-
+   
     uint32_t idx = seqNum % pb->winSize;
     Packet *pkt = &pb->buffer[idx];
-
-    if (pkt->packetData != NULL)
+    if (!pkt->written)
     {
-        if (DEBUG_FLAG)
-        {
-            fprintf(stderr, "Error: Packet at index %u is already occupied.\n", idx);
-        }
-        return -1; // packet already occupied
-    }
-
-    pkt->packetData = (uint8_t *)calloc(packetLen, sizeof(uint8_t));
-    if (pkt->packetData == NULL)
-    {
-        fprintf(stderr, "Error: Failed to allocate memory for packet data.\n");
+        fprintf(stderr, "Error: Packet at index %u is already occupied and hasn't been written, sequence number %u. Please flushBuffer before adding another packet.\n", idx, seqNum);
         return -1;
     }
 
+    // packetData should be already allocated
+    if (!pkt->packetData)
+    {
+        fprintf(stderr, "Error: addPacket called before initPacketBuffer.\n");
+        return -1;
+    }
     memcpy(pkt->packetData, packet, packetLen);
     pkt->packetLen = packetLen;
-    pkt->recv = 0; // not received yet
+    pkt->written = 0;
 
+    if (pb->storedPackets == 0) pb->nextSeqNum = seqNum;    // only set nextSeqNum if this is the first packet buffered or buffer has been flushed
     pb->storedPackets++;
-
-    if (DEBUG_FLAG)
-    {
-        printf("Packet added successfully at index %u with sequence number %u.\n", idx, seqNum);
-    }
 
     return 0; // success
 }
@@ -165,104 +176,88 @@ int flushBuffer()
         return -1;
     }
     // write all packets that have been received and not written to the output file up to nextSeqNum
-    while (1)
+    for (int i = 0; i < pb->winSize; i++)
     {
         uint32_t idx = pb->nextSeqNum % pb->winSize;
         Packet *pkt = &pb->buffer[idx];
 
-        if (pkt->packetData && pkt->recv && !pkt->written)
+        if (pkt->packetData && !pkt->written)
         {
             int bytesWritten = write(pb->outFileFd, pkt->packetData, pkt->packetLen);
             if (bytesWritten < 0)
             {
-                perror("Error flushing to output file");
+                fprintf(stderr, "Error flushing buffer packet at idx %u to output file\n", idx);
                 return -1;
             }
-            pkt->written = 1; // mark as written
+            memset(pkt->packetData, 0, pkt->packetLen);
+            pkt->packetLen = 0;
+            pkt->written = 1;
             pb->storedPackets--;
             pb->nextSeqNum++;
         }
         else
         {
-            return 0;
+            // Stop at first written or open packet
+            break;
         }
     }
+    pb->nextSeqNum = 0; // reset nextSeqNum to something it should never be
+    pb->storedPackets = 0; // reset stored packets after flushing
+    return 0;
 }
 
-// mark a packet as received
-int markPacketReceived(uint32_t seqNum)
+// retirn the next sequence number to write
+int getNextSeqNum()
 {
-    if (pb == NULL || seqNum < pb->nextSeqNum || seqNum >= pb->nextSeqNum + pb->winSize)
+    if (pb == NULL)
     {
-        if (DEBUG_FLAG)
-        {
-            fprintf(stderr, "Error: Invalid parameters for markPacketReceived.\n");
-        }
-        return -1; // invalid parameters
+        fprintf(stderr, "Error: Packet buffer is NULL.\n");
+        return -1; // error
     }
-
-    uint32_t idx = seqNum % pb->winSize;
-    Packet *pkt = &pb->buffer[idx];
-
-    if (pkt->packetData == NULL)
-    {
-        if (DEBUG_FLAG)
-        {
-            fprintf(stderr, "Error: Packet at index %u is not occupied.\n", idx);
-        }
-        return -1; // packet not occupied
-    }
-
-    pkt->recv = 1; // mark as received
-
-    if (DEBUG_FLAG)
-    {
-        printf("Packet at index %u with sequence number %u marked as received.\n", idx, seqNum);
-    }
-
-    return 0; // success
+    return pb->nextSeqNum;
 }
 
-// check if a packet is received
-int isPacketReceived(uint32_t seqNum)
+// returns the number of packets currently stored in the buffer
+int getStoredPackets()
 {
-    if (pb == NULL || seqNum < pb->nextSeqNum || seqNum >= pb->nextSeqNum + pb->winSize)
+    if (pb == NULL)
     {
-        if (DEBUG_FLAG)
-        {
-            fprintf(stderr, "Error: Invalid parameters for isPacketReceived.\n");
-        }
-        return -1; // invalid parameters
+        fprintf(stderr, "Error: Packet buffer is NULL.\n");
+        return -1; // error
     }
-
-    uint32_t idx = seqNum % pb->winSize;
-    Packet *pkt = &pb->buffer[idx];
-
-    if (pkt->packetData == NULL)
-    {
-        if (DEBUG_FLAG)
-        {
-            fprintf(stderr, "Error: Packet at index %u is not occupied.\n", idx);
-        }
-        return 0; // packet not occupied
-    }
-
-    return pkt->recv; // return received status
+    return pb->storedPackets;
 }
 
-// check if the buffer is full
-int bufferFull()
+// returns 1 if the buffer is not full, 0 if it is full
+int bufferOpen()
 {
     if (pb == NULL)
     {
         if (DEBUG_FLAG)
-            fprintf(stderr, "Error: Packet buffer is NULL.\n");
+            fprintf(stderr, "Error: Packet buffer hasn't beeen initialized.\n");
         return 1;
     }
 
     if (pb->storedPackets < pb->winSize)
-        return 0;
+        return 1;
 
-    return 1;
+    return 0;
 }
+
+// returns 1 if there are packets to write, 0 if not
+int needFlush()
+{
+    if (pb == NULL)
+    {
+        if (DEBUG_FLAG)
+            fprintf(stderr, "Error: Packet buffer hasn't been initialized.\n");
+        return 0;
+    }
+
+    if (pb->storedPackets > 0)
+        return 1;
+
+    return 0;
+}
+
 // func defs end

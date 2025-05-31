@@ -8,7 +8,7 @@ Window *win = NULL;
 // func defs start
 
 // setup window
-void initWindow(uint32_t winSize)
+void initWindow(uint32_t winSize, int buffSize)
 {
     if (win != NULL || winSize > MAX_PANES)
     {
@@ -34,12 +34,32 @@ void initWindow(uint32_t winSize)
         return;
     }
 
-    win->lower = 0;
-    win->curr = 0;
-    if (DEBUG_FLAG)
+    // initialize each pane in the buffer
+    for (int i = 0; i < winSize; i++)
     {
-        printf("Window initialized with size: %u\n", winSize);
+        win->paneBuff[i].packet = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
+        if (win->paneBuff[i].packet == NULL)
+        {
+            fprintf(stderr, "Error: Failed to allocate memory for packet in pane at index %d.\n", i);
+            // free all previously allocated packets
+            for (uint32_t j = 0; j < i; j++)
+            {
+                free(win->paneBuff[j].packet);
+                win->paneBuff[j].packet = NULL;
+            }
+            free(win->paneBuff);
+            free(win);
+            win = NULL;
+            return;
+        }
+        win->paneBuff[i].packetLen = 0;
+        win->paneBuff[i].seqNum = 0;
+        win->paneBuff[i].ack = 0;
+        win->paneBuff[i].occupied = 0;
     }
+
+    win->lower = 1; // the first expected seqNum should be 1
+    win->curr = 1;
 }
 
 // self explanatory
@@ -73,16 +93,12 @@ void freeWindow()
     }
     free(win);
     win = NULL;
-    if (DEBUG_FLAG)
-    {
-        printf("Window freed successfully.\n");
-    }
 }
 
 // insert a pane into the window
 int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
 {
-    if (win == NULL || windowFull() || packet == NULL || packetLen <= 0 ||
+    if (win == NULL || !(windowOpen()) || packet == NULL || packetLen <= 0 ||
         seqNum < win->lower || seqNum >= win->lower + win->winSize)
     {
         if (DEBUG_FLAG)
@@ -107,20 +123,20 @@ int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
     {
         if (DEBUG_FLAG)
         {
-            fprintf(stderr, "Error: Pane at index %u is already occupied.\n", idx);
+            fprintf(stderr, "Error: Pane at index %u is already occupied, sequence number %u. Please slideWindow before adding another Pane.\n", idx, seqNum);
         }
         return -1; // pane already occupied
     }
 
-    pane->packet = (uint8_t *)calloc(packetLen, sizeof(uint8_t));
-    if (pane->packet == NULL)
-    {
-        fprintf(stderr, "Error: Failed to allocate memory for packet in pane.\n");
-        return -1;
-    }
     // set the most recently added pane to current packet
     win->curr = seqNum;
 
+    // pane->packet should already be allocated
+    if (!pane->packet)
+    {
+        fprintf(stderr, "Error: addPacket called before initPacketBuffer.\n");
+        return -1;
+    }
     memcpy(pane->packet, packet, packetLen);
     pane->packetLen = packetLen;
     pane->seqNum = seqNum;
@@ -158,6 +174,7 @@ int markPaneAck(uint32_t ackedSeqNum)
     return -1;
 }
 
+// returns 1 if the pane is ACKed, 0 if not, -1 on error
 int checkPaneAck(uint32_t seqNum)
 {
     if (win == NULL || seqNum < win->lower || seqNum >= win->lower + win->winSize)
@@ -195,8 +212,8 @@ void slideWindow(uint32_t newLow)
         Pane *pane = &win->paneBuff[idx];
         if (pane->occupied)
         {
-            free(pane->packet);
-            pane->packet = NULL;
+            // don't free packet memory just set to 0 so that it c an be overwritten later
+            memset(pane->packet, 0, pane->packetLen);
             pane->packetLen = 0;
             pane->seqNum = 0;
             pane->ack = 0;
@@ -252,26 +269,22 @@ uint32_t getCurrSeqNum()
     return win->curr;
 }
 
-// check if window is full
-int windowFull()
+// returns 1 if window is open, 0 if closed
+int windowOpen()
 {
     if (win == NULL)
     {
         fprintf(stderr, "Error: Window is NULL.\n");
-        return 1;
+        return 0;
     }
     for (uint32_t i = 0; i < win->winSize; i++)
     {
         Pane *pane = &win->paneBuff[i];
         if (!pane->occupied)
         {
-            return 0;
+            return 1; // window is open
         }
     }
-    if (DEBUG_FLAG)
-    {
-        printf("Window is full.\n");
-    }
-    return 1;
+    return 0; // window is full
 }
 // func defs end

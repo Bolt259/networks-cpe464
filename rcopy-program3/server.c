@@ -257,7 +257,7 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 	else
 	{
 		sendBuff(response, 0, client, FNAME_OK, 0, buff);
-		initWindow(winSize);
+		initWindow(winSize, buffSize);
 		retVal = SEND_DATA;
 	}
 	return retVal;
@@ -269,8 +269,8 @@ STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
     uint8_t dataBuff[MAX_PAYLOAD] = {0};
     int32_t lenRead = 0;
 
-    // Fill window
-    while (!windowFull())
+    // fill window if open
+    while (windowOpen())
     {
         lenRead = read(dataFile, dataBuff, buffSize);
         if (lenRead <= 0)
@@ -316,9 +316,9 @@ STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
         }
     }
 
-    // Window is full: block for 1s waiting for ACK_RR/SREJ
-    if (windowFull())
-    {	// do recvBuff here and check for ACK_RR or SREJ or call waitOnAckSrej------------------^
+    // window is closed: block for 1s waiting for ACK_RR/SREJ
+    if (!windowOpen())
+    {
 		uint8_t flag = 0;
 		uint32_t ackSeqNum = 0;
 		int32_t recvLen = recvBuff(packet, MAX_PACK_LEN, client->socketNum, client, &flag, &ackSeqNum);
@@ -454,10 +454,13 @@ STATE waitOnAckSrej(Connection *client)
 		uint32_t resendSeq = getLowerBound();
 		while (resendSeq < getCurrSeqNum())
 		{
-			Pane *pane = resendPane(resendSeq);
-			if (pane && !pane->ack)
+			if (!checkPaneAck(resendSeq))
 			{
-				sendBuff(pane->packet, pane->packetLen, client, SREJ_DATA, pane->seqNum, buff);
+				Pane *pane = resendPane(resendSeq);
+				if (pane && !pane->ack)
+				{
+					sendBuff(pane->packet, pane->packetLen, client, SREJ_DATA, pane->seqNum, buff);
+				}
 			}
 			resendSeq++;
 		}

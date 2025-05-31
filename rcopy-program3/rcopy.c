@@ -40,10 +40,10 @@ enum State
 };
 
 void transferFile(char *argv[]);
-STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum);
+STATE start_state(char **argv, Connection *server, uint32_t *expectedSeqNum, uint32_t winSize, int32_t buffSize);
 STATE filename(char *fname, Connection *server);
-STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum, uint32_t winSize);
-STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize);
+STATE recvData(int32_t outFile, Connection *server, uint32_t *expectedSeqNum);
+STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize, int32_t buffSize);
 void checkArgs(int argc, char *argv[], float *errorRate);
 
 int main(int argc, char *argv[])
@@ -70,24 +70,25 @@ void transferFile(char *argv[])
     Connection *server = (Connection *)calloc(1, sizeof(Connection));
     STATE state = START;
     int outFileFd = 0;
-    uint32_t clientSeqNum = 0;
     uint32_t winSize = atoi(argv[3]);
+    int32_t buffSize = atoi(argv[4]);
+    static uint32_t expectedSeqNum = START_SEQ_NUM;  // hold value outside of this function
 
     while (state != DONE)
     {
         switch (state)
         {
         case START:
-            state = start_state(argv, server, &clientSeqNum);
+            state = start_state(argv, server, &expectedSeqNum, winSize, buffSize);
             break;
         case FILENAME:
             state = filename(argv[1], server);
             break;
         case FILE_OK:
-            state = file_ok(&outFileFd, argv[2], winSize);
+            state = file_ok(&outFileFd, argv[2], winSize, buffSize);
             break;
         case RECV_DATA:
-            state = recvData(outFileFd, server, &clientSeqNum, winSize);
+            state = recvData(outFileFd, server, &expectedSeqNum);
             break;
         case DONE:
             if (outFileFd > 0)
@@ -103,7 +104,7 @@ void transferFile(char *argv[])
     }
 }
 
-STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
+STATE start_state(char **argv, Connection *server, uint32_t *expectedSeqNum, uint32_t winSize, int32_t buffSize)
 {
     uint8_t packet[MAX_PACK_LEN] = {0};
     uint8_t buffer[MAX_PACK_LEN] = {0};
@@ -111,8 +112,8 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
     char *hostname = argv[6];
     int portNumber = atoi(argv[7]);
     STATE retVal = FILENAME;
-    uint32_t winSize = htonl(atoi(argv[3]));
-    int32_t bufferLen = htonl(atoi(argv[4]));
+    uint32_t winSizeNet = htonl(winSize);
+    int32_t buffSizeNet = htonl(buffSize);
     int len = 0;
 
     // check if fileNameLen is too long
@@ -139,16 +140,16 @@ STATE start_state(char **argv, Connection *server, uint32_t *clientSeqNum)
     }
     else
     {
-        // build fname PDU [winSize (4 bytes)] [bufferLen (4 bytes)] [fileName (MAX_FNAME_LEN bytes)]
-        memcpy(buffer, &winSize, BUFF_SIZE);
-        memcpy(&buffer[BUFF_SIZE], &bufferLen, BUFF_SIZE);
+        // build fname PDU [winSize (4 bytes)] [buffSize (4 bytes)] [fileName (MAX_FNAME_LEN bytes)]
+        memcpy(buffer, &winSizeNet, BUFF_SIZE);
+        memcpy(&buffer[BUFF_SIZE], &buffSizeNet, BUFF_SIZE);
         memcpy(&buffer[WIN_BUFF_LEN], argv[1], fileNameLen);
         printIPInfo(&server->remote);
 
         // send packet to server with filename
         len = WIN_BUFF_LEN + fileNameLen;
-        sendBuff(buffer, len, server, FNAME, *clientSeqNum, packet);
-        (*clientSeqNum)++;
+        sendBuff(buffer, len, server, FNAME, *expectedSeqNum, packet);
+        (*expectedSeqNum)++;
     }
 
     return retVal;
@@ -188,7 +189,7 @@ STATE filename(char *fname, Connection *server)
     return retVal;
 }
 
-STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize)
+STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize, int32_t buffSize)
 {
     STATE retVal = DONE;
 
@@ -199,22 +200,19 @@ STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize)
     }
     else
     { // file opened and ready to receive data
+        initPacketBuffer(winSize, buffSize, *outFileFd);
         retVal = RECV_DATA;
-        initPacketBuffer(winSize, *outFileFd);
-
     }
     return retVal;
 }
 
-STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum, uint32_t winSize)
+STATE recvData(int32_t outFile, Connection *server, uint32_t *expectedSeqNum)
 {
-    uint32_t seqNum = 0;
     uint32_t ackSeqNum = 0;
     uint8_t flag = 0;
     int32_t dataLen = 0;
     uint8_t dataBuff[MAX_PACK_LEN];
     uint8_t packet[MAX_PACK_LEN];
-    static int32_t expectedSeqNum = START_SEQ_NUM;  // hold value outside of this function
 
     if (selectCall(server->socketNum, LONG_TIME, 0) == 0)
     {
@@ -222,7 +220,7 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum, uint
         return DONE;
     }
 
-    dataLen = recvBuff(dataBuff, MAX_PACK_LEN, server->socketNum, server, &flag, &seqNum);
+    dataLen = recvBuff(dataBuff, MAX_PACK_LEN, server->socketNum, server, &flag, &ackSeqNum);
 
     // do state RECV_DATA again if there is a  crc error (don't send ack, don't write data)
     if (dataLen == CRC_ERROR)
@@ -232,34 +230,51 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *clientSeqNum, uint
     if (flag == END_OF_FILE)
     {
         // send ACK_RR
-        sendBuff(packet, 1, server, EOF_ACK, *clientSeqNum, packet);
-        (*clientSeqNum)++;
+        sendBuff(packet, 1, server, EOF_ACK, *expectedSeqNum, packet);
         freePacketBuffer();
         if (DEBUG_FLAG) printf("File done\n");
         return DONE;
     }
     else if (flag == DATA || flag == SREJ_DATA || flag == TIMEOUT_DATA)
     {
-        addPacket(dataBuff, dataLen, seqNum);
-        markPacketReceived(seqNum);
-
-        if (seqNum > expectedSeqNum)
+        
+        if (ackSeqNum > *expectedSeqNum)
         {
-            // out of order packet -> send SREJ
-            ackSeqNum = htonl(expectedSeqNum);
-            sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, SREJ, *clientSeqNum, packet);
-            (*clientSeqNum)++;
+            // out of order packet -> buffer and send SREJ
+            if (bufferOpen())   // shoulkd always be open here but just in case rcopy can't buffer
+            {
+                if (addPacket(dataBuff, dataLen, ackSeqNum) < 0)
+                {
+                    fprintf(stderr, "Error: Failed to add packet to buffer.\n");
+                    return DONE;
+                }
+            }
+
+            ackSeqNum = htonl(*expectedSeqNum); // this is unnecessary because the buffer/packet won't even be read by the server in this case
+            sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, SREJ, *expectedSeqNum, packet);
             return RECV_DATA;
         }
-        else if (seqNum == expectedSeqNum)
+        else if (ackSeqNum == *expectedSeqNum)
         {
-            flushBuffer(); // write packets to file and slide window
-            expectedSeqNum++;
+            if (needFlush())
+            {
+                flushBuffer(); // write packets to file clear buffer
+                (*expectedSeqNum) = getNextSeqNum(); // update expected sequence number to the one after thelatest one written from buff
+            }
+            else
+            {
+                // write data to file
+                if (write(outFile, dataBuff, dataLen) < 0)
+                {
+                    perror("Error writing to output file in recvData where rcopy got expected seq num");
+                    return DONE;
+                }
+                (*expectedSeqNum)++;
+            }
         }
         // either alr written or just received this packet -> send ACK_RR
-        ackSeqNum = htonl(seqNum);
-        sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK_RR, *clientSeqNum, packet);
-        (*clientSeqNum)++;
+        ackSeqNum = htonl(*expectedSeqNum - 1); // send ack for the last expected seq num that should be alr written
+        sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK_RR, ((*expectedSeqNum) - 1), packet);
     }
     else
     {
