@@ -31,7 +31,7 @@ enum State
 {
 	START,
 	FILENAME,
-	SEND_DATA,
+	SEND_PACKET,
 	POLL_ACK_SREJ,
 	WAIT_ON_ACK_SREJ,
 	TIMEOUT_ON_ACK,
@@ -41,10 +41,10 @@ enum State
 };
 
 void serverTransfer(int serverSock);
-void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connection *client);
+void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connection *client);
 STATE filename(Connection *client, uint8_t *buff, int32_t recvLen, int32_t *dataFile, int32_t *buffSize);
-STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen, int32_t dataFile, int32_t buffSize, uint32_t *seqNum);
-STATE pollAckSrej(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum);
+STATE sendPacket(Connection *client, uint8_t *packet, int32_t *packetLen, int32_t dataFile, int32_t buffSize, uint32_t *seqNum);
+STATE handleFeedback(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum);
 STATE waitOnAckSrej(Connection *client, uint32_t *seqNum);
 STATE timeoutOnAck(Connection *client, uint8_t *packet, int32_t packetLen, uint32_t *seqNum);
 STATE waitOnEofAck(Connection *client);
@@ -109,14 +109,14 @@ void serverTransfer(int serverSock)
 
 				// child process
 				printf("Child fork() - child pid: %d\n", getpid());
-				processClient(serverSock, buff, recvLen, client);
+				clientControl(serverSock, buff, recvLen, client);
 				exit(0);
 			}
 		}
 	}
 }
 
-void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connection *client)
+void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connection *client)
 {
 	// Process each new clients request
 	STATE state = START;
@@ -136,11 +136,11 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 		case FILENAME:
 			state = filename(client, buff, recvLen, &dataFile, &buffSize);
 			break;
-		case SEND_DATA:
-			state = sendData(client, packet, &packetLen, dataFile, buffSize, &seqNum);
+		case SEND_PACKET:
+			state = sendPacket(client, packet, &packetLen, dataFile, buffSize, &seqNum);
 			break;
 		case POLL_ACK_SREJ:
-			state = pollAckSrej(client, packet, &packetLen, &seqNum);
+			state = handleFeedback(client, packet, &packetLen, &seqNum);
 			break;
 		case WAIT_ON_ACK_SREJ:
 			state = waitOnAckSrej(client, &seqNum);
@@ -167,7 +167,7 @@ void processClient(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 			free(client);	// free each child's Connection struct
 			break;
 		default:
-			printf("ERROR - In default state (processClient)\n");
+			printf("ERROR - In default state (clientControl)\n");
 			state = DONE;
 			break;
 		}
@@ -260,12 +260,12 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
 	{
 		sendBuff(response, 0, client, FNAME_OK, 0, buff);
 		initWindow(winSize, *buffSize);
-		retVal = SEND_DATA;
+		retVal = SEND_PACKET;
 	}
 	return retVal;
 }
 
-STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
+STATE sendPacket(Connection *client, uint8_t *packet, int32_t *packetLen,
                int32_t dataFile, int32_t buffSize, uint32_t *seqNum)
 {
     uint8_t dataBuff[MAX_PAYLOAD] = {0};
@@ -279,7 +279,7 @@ STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
 	}
 	else if (lenRead < 0)
 	{
-		perror("sendData, read on file error");
+		perror("sendPacket, read on file error");
 		return DONE;
 	}
 
@@ -290,7 +290,7 @@ STATE sendData(Connection *client, uint8_t *packet, int32_t *packetLen,
 	return POLL_ACK_SREJ;
 }
 
-STATE pollAckSrej(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum)
+STATE handleFeedback(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum)
 {
 	// non blocking poll just for server to check if rcopy has sent anything
 	// and adjust seqNum as needed
@@ -309,13 +309,13 @@ STATE pollAckSrej(Connection *client, uint8_t *packet, int32_t *packetLen, uint3
 			}
 			else if (flag == SREJ)
 			{
-				*seqNum = ackSeqNum;	// tell sendData to resend this seqNum
+				*seqNum = ackSeqNum;	// tell sendPacket to resend this seqNum
 			}
 		}
 	}
 	if (windowOpen())
 	{
-		return SEND_DATA;
+		return SEND_PACKET;
 	}
 	else
 	{
@@ -346,7 +346,7 @@ STATE waitOnEofAck(Connection *client)
 		{
 			markPaneAck(seqNum);
 			slideWindow(seqNum + 1);
-			retVal = SEND_DATA;	// do this just in case rcopy is ACKing past packets
+			retVal = SEND_PACKET;	// do this just in case rcopy is ACKing past packets
 		}
 		else if (flag == SREJ)
 		{
@@ -377,7 +377,7 @@ STATE waitOnAckSrej(Connection *client, uint32_t *seqNum)
 	uint32_t ackSeqNum = 0;
 	static int retryCnt = 0;
 
-	if ((retVal = processSelect(client, &retryCnt, TIMEOUT_ON_ACK, SEND_DATA, DONE)) == SEND_DATA)
+	if ((retVal = processSelect(client, &retryCnt, TIMEOUT_ON_ACK, SEND_PACKET, DONE)) == SEND_PACKET)
 	{
 		crcCheck = recvBuff(buff, len, client->socketNum, client, &flag, &ackSeqNum);
 		// if crc error ignore packet
