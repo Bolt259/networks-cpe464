@@ -100,7 +100,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/rcopy",
-        "args": ["test.pdf", "downloadTestDBG.pdf", "10", "1000", "0", "localhost", "40000"],
+        "args": ["test.pdf", "downloadTestDBG.pdf", "10", "400", "0", "localhost", "40000"],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "environment": [],

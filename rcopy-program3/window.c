@@ -164,6 +164,7 @@ int markPaneAck(uint32_t ackedSeqNum)
     if (pane->occupied && pane->seqNum == ackedSeqNum)
     {
         pane->ack = 1;
+        win->curr = ackedSeqNum + 1;    // here was a bug where curr was not updated after ACKing a pane which should always be the case as our curr moves forward after every ACK
         if (DEBUG_FLAG)
         {
             printf("Pane at index %u with sequence number %u marked as ACKed.\n", idx, ackedSeqNum);

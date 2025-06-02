@@ -167,7 +167,7 @@ int getPacket(uint8_t *packet, int *packetLen, uint32_t seqNum)
     return 0; // success
 }
 
-// flush the buffer to the output file
+// returns number of bytes written on success or -1 on error
 int flushBuffer()
 {
     if (pb == NULL)
@@ -175,6 +175,9 @@ int flushBuffer()
         fprintf(stderr, "Error: Packet buffer is NULL.\n");
         return -1;
     }
+    int totBytesWritten = 0;
+    int bytesWritten = 0;
+
     // write all packets that have been received and not written to the output file up to nextSeqNum
     for (int i = 0; i < pb->winSize; i++)
     {
@@ -183,12 +186,21 @@ int flushBuffer()
 
         if (pkt->packetData && !pkt->written)
         {
-            int bytesWritten = write(pb->outFileFd, pkt->packetData, pkt->packetLen);
+            bytesWritten = write(pb->outFileFd, pkt->packetData, pkt->packetLen);
             if (bytesWritten < 0)
             {
                 fprintf(stderr, "Error flushing buffer packet at idx %u to output file\n", idx);
                 return -1;
             }
+
+            //~!*> fsync the file to ensure data is written to disk
+            if (fsync(pb->outFileFd) < 0)
+            {
+                fprintf(stderr, "Error syncing output file after writing packet at idx %u\n", idx);
+                return -1;
+            }
+
+            totBytesWritten += bytesWritten;
             memset(pkt->packetData, 0, pkt->packetLen);
             pkt->packetLen = 0;
             pkt->written = 1;
@@ -197,13 +209,13 @@ int flushBuffer()
         }
         else
         {
-            // Stop at first written or open packet
+            // stop at first written or open packet
             break;
         }
     }
     pb->nextSeqNum = 0; // reset nextSeqNum to something it should never be
     pb->storedPackets = 0; // reset stored packets after flushing
-    return 0;
+    return totBytesWritten;
 }
 
 // retirn the next sequence number to write

@@ -434,6 +434,7 @@ STATE waitEofAck(Connection *client, uint8_t *packet)
 			resendPane(client, SREJ_DATA, ackSeqNum, packet);
 			return WAIT_EOF_ACK;
 		}
+		return WAIT_EOF_ACK;
 	}
 	else return TIMEOUT_EOF_RESEND;
 }
