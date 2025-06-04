@@ -48,9 +48,9 @@ STATE filename(Connection *client, uint8_t *buff, int32_t recvLen, int32_t *data
 STATE sendPacket(Connection *client, uint8_t *packet, int32_t *packetLen, int32_t dataFile, int32_t buffSize, uint32_t *seqNum, int *eofSent);
 STATE handleFeedback(Connection *client, uint8_t *packet, uint32_t *seqNum);
 STATE waiter(Connection *client);
-STATE timeoutResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum, int *retryCnt);
+STATE timeoutResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t seqNum, int *retryCnt);
 STATE waitEofAck(Connection *client, uint8_t *packet);
-STATE timeoutEofResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum, int *retryCnt);
+STATE timeoutEofResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t seqNum, int *retryCnt);
 void cleanup(int32_t dataFile, Connection *client);
 
 // helpers
@@ -105,10 +105,10 @@ void serverTransfer(int serverSock)
 			}
 			if (pid == 0)
 			{
-				//~!*
-				printf("Press Enter to continue into child process...\n");
-				getchar(); // wait for user input to debug
-				//~!*
+				// //~!*
+				// printf("Press Enter to continue into child process...\n");
+				// getchar(); // wait for user input to debug
+				// //~!*
 
 				// child process
 				printf("Child fork() - child pid: %d\n", getpid());
@@ -485,13 +485,13 @@ STATE waitEofAck(Connection *client, uint8_t *packet)
 // 	return retVal;
 // }
 
-STATE timeoutResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum, int *retryCnt)
+STATE timeoutResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t seqNum, int *retryCnt)
 {
 	if (*retryCnt >= MAX_TRIES)
 	{
 		return DONE;
 	}
-	*packetLen = resendPane(client, TIMEOUT_DATA, *seqNum, packet);
+	*packetLen = resendPane(client, TIMEOUT_DATA, seqNum, packet);
 	(*retryCnt)++;
 
 	return WAITER;
@@ -507,14 +507,14 @@ STATE timeoutResend(Connection *client, uint8_t *packet, int32_t *packetLen, uin
 // 	return WAITER;
 // }
 
-STATE timeoutEofResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum, int *retryCnt)
+STATE timeoutEofResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t seqNum, int *retryCnt)
 {
 	if (*retryCnt >= MAX_TRIES)
 	{
 		return DONE;
 	}
 	uint8_t dataBuff[MAX_PAYLOAD] = {0};
-	*packetLen = sendBuff(dataBuff, 1, client, END_OF_FILE, *seqNum, packet);
+	*packetLen = sendBuff(dataBuff, 1, client, END_OF_FILE, seqNum, packet);
 	(*retryCnt)++;
 	return WAIT_EOF_ACK;
 }
