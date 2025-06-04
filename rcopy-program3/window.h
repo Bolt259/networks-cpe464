@@ -21,7 +21,7 @@ typedef struct
     uint8_t *packet;
     uint32_t seqNum;
     int ack;        // 1 = ACK, 0 = NAK
-    int occupied;   // 1 = occupied, 0 = empty
+    // int occupied;   // 1 = occupied, 0 = empty
 } Pane; // like a pane of glass in the sliding window - panes hold relevant packet data for storage
 
 typedef struct

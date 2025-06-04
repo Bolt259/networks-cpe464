@@ -54,8 +54,8 @@ void initWindow(uint32_t winSize, int buffSize)
         }
         win->paneBuff[i].packetLen = 0;
         win->paneBuff[i].seqNum = 0;
-        win->paneBuff[i].ack = 0;
-        win->paneBuff[i].occupied = 0;
+        win->paneBuff[i].ack = 1;   // set ack to 1 so that addPane() can overwrite it
+        // win->paneBuff[i].occupied = 0;
     }
 
     win->lower = 1; // the first expected seqNum should be 1
@@ -75,14 +75,14 @@ void freeWindow()
         for (uint32_t i = 0; i < win->winSize; i++)
         {
             Pane *pane = &win->paneBuff[i];
-            if (pane->occupied && pane->packet)
+            if (pane->packet)
             {
                 free(pane->packet);
                 pane->packet = NULL;
                 pane->packetLen = 0;
                 pane->seqNum = 0;
                 pane->ack = 0;
-                pane->occupied = 0;
+                // pane->occupied = 0;
             }
         }
         free(win->paneBuff);
@@ -119,13 +119,13 @@ int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
 
     uint32_t idx = seqNum % win->winSize;
     Pane *pane = &win->paneBuff[idx];
-    if (pane->occupied)
+    if (!pane->ack)
     {
         if (DEBUG_FLAG)
         {
-            fprintf(stderr, "Error: Pane at index %u is already occupied, sequence number %u. Please slideWindow before adding another Pane.\n", idx, seqNum);
+            fprintf(stderr, "Error: Pane at index %u is not ACKed, sequence number %u. Please resendPane, wait for ACK, then call slideWindow before adding yet another Pane, for the love of Smith.\n", idx, seqNum);
         }
-        return -1; // pane already occupied
+        return -1; // pane not ACKed
     }
 
     // set the most recently added pane to current packet
@@ -141,7 +141,6 @@ int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
     pane->packetLen = packetLen;
     pane->seqNum = seqNum;
     pane->ack = 0;
-    pane->occupied = 1;
 
     if (DEBUG_FLAG)
     {
@@ -161,7 +160,7 @@ int markPaneAck(uint32_t ackedSeqNum)
 
     uint32_t idx = ackedSeqNum % win->winSize;
     Pane *pane = &win->paneBuff[idx];   // temp pane for reference
-    if (pane->occupied && pane->seqNum == ackedSeqNum)
+    if (pane->seqNum == ackedSeqNum)
     {
         pane->ack = 1;
         win->curr = ackedSeqNum + 1;    // here was a bug where curr was not updated after ACKing a pane which should always be the case as our curr moves forward after every ACK
@@ -186,7 +185,7 @@ int checkPaneAck(uint32_t seqNum)
 
     uint32_t idx = seqNum % win->winSize;
     Pane *pane = &win->paneBuff[idx];
-    if (pane->occupied && pane->seqNum == seqNum)
+    if (pane->seqNum == seqNum)
     {
         return pane->ack;
     }
@@ -211,14 +210,13 @@ void slideWindow(uint32_t newLow)
     {
         uint32_t idx = seqNum % win->winSize;
         Pane *pane = &win->paneBuff[idx];
-        if (pane->occupied)
+        if (pane->ack)
         {
             // don't free packet memory just set to 0 so that it c an be overwritten later
             memset(pane->packet, 0, pane->packetLen);
             pane->packetLen = 0;
             pane->seqNum = 0;
-            pane->ack = 0;
-            pane->occupied = 0;
+            // leave ack set so that addPane() can overwrite it
         }
     }
     win->lower = newLow;
@@ -236,7 +234,7 @@ int32_t resendPane(Connection *client, uint8_t flag, uint32_t seqNum, uint8_t *p
     int32_t packetLen = -1;
     uint32_t idx = seqNum % win->winSize;
     Pane *pane = &win->paneBuff[idx];
-    if (pane->occupied && pane->ack == 0 && pane->seqNum == seqNum)
+    if (pane->ack == 0 && pane->seqNum == seqNum)
     {
         packetLen = sendBuff(pane->packet, pane->packetLen, client, flag, seqNum, packet);
         if (DEBUG_FLAG)
@@ -246,7 +244,7 @@ int32_t resendPane(Connection *client, uint8_t flag, uint32_t seqNum, uint8_t *p
         return packetLen;
     }
 
-    fprintf(stderr, "Error: Pane at index %u with sequence number %u not found or not occupied.\n", idx, seqNum);
+    fprintf(stderr, "Error: Pane at index %u with sequence number %u not found or already ACKed.\n", idx, seqNum);
     return -1;
 }
 
@@ -283,7 +281,7 @@ int windowOpen()
     for (uint32_t i = 0; i < win->winSize; i++)
     {
         Pane *pane = &win->paneBuff[i];
-        if (!pane->occupied)
+        if (pane->ack)
         {
             return 1; // window is open
         }

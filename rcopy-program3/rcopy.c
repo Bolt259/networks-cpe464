@@ -33,7 +33,7 @@ typedef enum State STATE;
 enum State
 {
     START,
-    FILENAME,
+    FNAME_RECV,
     FILE_OK,
     RECV_DATA,
     DONE
@@ -41,7 +41,7 @@ enum State
 
 void transferFile(char *argv[]);
 STATE start_state(char **argv, Connection *server, uint32_t *expectedSeqNum, uint32_t winSize, int32_t buffSize);
-STATE filename(char *fname, Connection *server);
+STATE fnameRecv(char *fname, Connection *server);
 STATE recvData(int32_t outFile, Connection *server, uint32_t *expectedSeqNum);
 STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize, int32_t buffSize);
 void checkArgs(int argc, char *argv[], float *errorRate);
@@ -81,8 +81,8 @@ void transferFile(char *argv[])
         case START:
             state = start_state(argv, server, &expectedSeqNum, winSize, buffSize);
             break;
-        case FILENAME:
-            state = filename(argv[1], server);
+        case FNAME_RECV:
+            state = fnameRecv(argv[1], server);
             break;
         case FILE_OK:
             state = file_ok(&outFileFd, argv[2], winSize, buffSize);
@@ -111,7 +111,7 @@ STATE start_state(char **argv, Connection *server, uint32_t *expectedSeqNum, uin
     int fileNameLen = strlen(argv[1]);
     char *hostname = argv[6];
     int portNumber = atoi(argv[7]);
-    STATE retVal = FILENAME;
+    STATE retVal = FNAME_RECV;
     uint32_t winSizeNet = htonl(winSize);
     int32_t buffSizeNet = htonl(buffSize);
     int len = 0;
@@ -154,7 +154,7 @@ STATE start_state(char **argv, Connection *server, uint32_t *expectedSeqNum, uin
     return retVal;
 }
 
-STATE filename(char *fname, Connection *server)
+STATE fnameRecv(char *fname, Connection *server)
 {
     // get server response
     // returns START if no reply, DONE if bad filename, FILE_OK otherwise

@@ -47,7 +47,7 @@ void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 STATE filename(Connection *client, uint8_t *buff, int32_t recvLen, int32_t *dataFile, int32_t *buffSize);
 STATE sendPacket(Connection *client, uint8_t *packet, int32_t *packetLen, int32_t dataFile, int32_t buffSize, uint32_t *seqNum, int *eofSent);
 STATE handleFeedback(Connection *client, uint8_t *packet, uint32_t *seqNum);
-STATE waiter(Connection *client, uint32_t *seqNum);
+STATE waiter(Connection *client);
 STATE timeoutResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum, int *retryCnt);
 STATE waitEofAck(Connection *client, uint8_t *packet);
 STATE timeoutEofResend(Connection *client, uint8_t *packet, int32_t *packetLen, uint32_t *seqNum, int *retryCnt);
@@ -123,7 +123,10 @@ void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 {
 	// Process each new clients request
 	STATE state = FILENAME;
-	uint32_t seqNum = START_SEQ_NUM;	// state machine global to keep track of the sequence number to send
+
+	uint32_t seqNum = START_SEQ_NUM;	// state machine global to keep track of the sequence number to send ::: thinking this isn't needed: ________^
+
+	uint32_t nextToSend = START_SEQ_NUM; // next sequence number to send, used for FSM global next seqNum to send
 	int eofSent = 0;
 	static int retryCnt = 0;
 
@@ -143,7 +146,7 @@ void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 		case SEND_PACKET:
 			if (!eofSent)
 			{
-				state = sendPacket(client, packet, &packetLen, dataFile, buffSize, &seqNum, &eofSent);
+				state = sendPacket(client, packet, &packetLen, dataFile, buffSize, &nextToSend, &eofSent);
 			}
 			else
 			{
@@ -152,15 +155,15 @@ void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 			break;
 
 		case WAITER:
-			state = waiter(client, &seqNum);
+			state = waiter(client);
 			break;
 
 		case HANDLE_FEEDBACK:
-			state = handleFeedback(client, packet, &seqNum);
+			state = handleFeedback(client, packet, &nextToSend);
 			break;
 
 		case TIMEOUT_RESEND:
-			state = timeoutResend(client, packet, &packetLen, &seqNum, &retryCnt);
+			state = timeoutResend(client, packet, &packetLen, getLowerBound(), &retryCnt);	// is this getLowerBound usage right here and below??
 			break;
 
 		case WAIT_EOF_ACK:
@@ -168,7 +171,7 @@ void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 			break;
 
 		case TIMEOUT_EOF_RESEND:
-			state = timeoutEofResend(client, packet, &packetLen, &seqNum, &retryCnt);
+			state = timeoutEofResend(client, packet, &packetLen, getLowerBound(), &retryCnt);
 			break;
 
 		case DONE:
@@ -306,7 +309,7 @@ STATE sendPacket(Connection *client, uint8_t *packet, int32_t *packetLen,
 	else return WAITER; // if window is closed, wait for ACK or SREJ
 }
 
-STATE waiter(Connection *client, uint32_t *seqNum)
+STATE waiter(Connection *client)
 {
 	int pollTime = (!windowOpen()) ? SHORT_TIME : 0;
 	if (selectCall(client->socketNum, pollTime, 0) == 1)
@@ -368,7 +371,7 @@ STATE handleFeedback(Connection *client, uint8_t *packet, uint32_t *seqNum)
 	{
 		markPaneAck(ackSeqNum);
 		slideWindow(ackSeqNum + 1);
-		*seqNum = ackSeqNum + 1; // update server state global to next packet
+		// *seqNum = ackSeqNum + 1; // update server state global to next packet
 	}
 	else if (flag == SREJ)
 	{
@@ -512,16 +515,7 @@ STATE timeoutEofResend(Connection *client, uint8_t *packet, int32_t *packetLen, 
 	}
 	uint8_t dataBuff[MAX_PAYLOAD] = {0};
 	*packetLen = sendBuff(dataBuff, 1, client, END_OF_FILE, *seqNum, packet);
-	(*seqNum)++;
 	(*retryCnt)++;
-
-	int32_t sentPacketLen = resendPane(client, TIMEOUT_DATA, *seqNum, packet);
-	if (sentPacketLen < 0)
-	{
-		fprintf(stderr, "Error: Failed to resend pane on timeout.\n");
-		return DONE;
-	}
-
 	return WAIT_EOF_ACK;
 }
 
