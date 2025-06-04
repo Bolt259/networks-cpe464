@@ -105,10 +105,10 @@ void serverTransfer(int serverSock)
 			}
 			if (pid == 0)
 			{
-				// //~!*
-				// printf("Press Enter to continue into child process...\n");
-				// getchar(); // wait for user input to debug
-				// //~!*
+				//~!*
+				printf("Press Enter to continue into child process...\n");
+				getchar(); // wait for user input to debug
+				//~!*
 
 				// child process
 				printf("Child fork() - child pid: %d\n", getpid());
@@ -299,7 +299,7 @@ STATE sendPacket(Connection *client, uint8_t *packet, int32_t *packetLen,
 			return DONE;
 		}
 		else
-		{
+		{		// normal sending case
 			addPane(dataBuff, lenRead, *seqNum);
 			*packetLen = sendBuff(dataBuff, lenRead, client, DATA, *seqNum, packet);
 			(*seqNum)++;
@@ -377,9 +377,13 @@ STATE handleFeedback(Connection *client, uint8_t *packet, uint32_t *seqNum)
 	{
 		resendPane(client, SREJ_DATA, ackSeqNum, packet);
 	}
-	else if (flag != ACK_RR && flag != SREJ)
+	else if (flag == EOF_ACK)
 	{
-		printf("{ERROR} In handleFeedback but its not an ACK_RR or SREJ flag (this should never happen) is: %d\n", flag);
+		return DONE;
+	}
+	else if (flag != ACK_RR && flag != SREJ && flag != EOF_ACK)
+	{
+		printf("{ERROR} In handleFeedback but its not an ACK_RR or SREJ or EOF_ACK flag (this should never happen) is: %d\n", flag);
 		return DONE;
 	}
 	return SEND_PACKET;

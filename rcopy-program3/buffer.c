@@ -193,12 +193,12 @@ int flushBuffer()
                 return -1;
             }
 
-            //~!*> fsync the file to ensure data is written to disk
-            if (fsync(pb->outFileFd) < 0)
-            {
-                fprintf(stderr, "Error syncing output file after writing packet at idx %u\n", idx);
-                return -1;
-            }
+            // //~!*> fsync the file to ensure data is written to disk
+            // if (fsync(pb->outFileFd) < 0)
+            // {
+            //     fprintf(stderr, "Error syncing output file after writing packet at idx %u\n", idx);
+            //     return -1;
+            // }
 
             totBytesWritten += bytesWritten;
             memset(pkt->packetData, 0, pkt->packetLen);
@@ -213,6 +213,7 @@ int flushBuffer()
             break;
         }
     }
+
     pb->nextSeqNum = 0; // reset nextSeqNum to something it should never be
     pb->storedPackets = 0; // reset stored packets after flushing
     return totBytesWritten;

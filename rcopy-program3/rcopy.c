@@ -269,12 +269,12 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *expectedSeqNum)
                     return DONE;
                 }
 
-                //~!*
-                if (fsync(outFile) < 0)
-                {
-                    fprintf(stderr, "Error syncing output file after writing packet in expected seq %u\n", *expectedSeqNum);
-                    return -1;
-                }
+                // //~!*
+                // if (fsync(outFile) < 0)
+                // {
+                //     fprintf(stderr, "Error syncing output file after writing packet in expected seq %u\n", *expectedSeqNum);
+                //     return -1;
+                // }
 
                 (*expectedSeqNum)++;
             }

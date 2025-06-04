@@ -116,6 +116,11 @@ int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
         }
         return -1;
     }
+    if (seqNum != win->curr)
+    {
+        fprintf(stderr, "Can only add panes in order, current sequence number is %u, but trying to add %u.\n", win->curr, seqNum);
+        return -1;
+    }
 
     uint32_t idx = seqNum % win->winSize;
     Pane *pane = &win->paneBuff[idx];
@@ -128,8 +133,8 @@ int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
         return -1; // pane not ACKed
     }
 
-    // set the most recently added pane to current packet
-    win->curr = seqNum;
+    // increment after adding
+    win->curr++;
 
     // pane->packet should already be allocated
     if (!pane->packet)
@@ -163,7 +168,6 @@ int markPaneAck(uint32_t ackedSeqNum)
     if (pane->seqNum == ackedSeqNum)
     {
         pane->ack = 1;
-        win->curr = ackedSeqNum + 1;    // here was a bug where curr was not updated after ACKing a pane which should always be the case as our curr moves forward after every ACK
         if (DEBUG_FLAG)
         {
             printf("Pane at index %u with sequence number %u marked as ACKed.\n", idx, ackedSeqNum);
@@ -276,16 +280,15 @@ int windowOpen()
     if (win == NULL)
     {
         fprintf(stderr, "Error: Window is NULL.\n");
-        return 0;
+        return -1;
     }
-    for (uint32_t i = 0; i < win->winSize; i++)
-    {
-        Pane *pane = &win->paneBuff[i];
-        if (pane->ack)
-        {
-            return 1; // window is open
-        }
-    }
-    return 0; // window is full
+    // uint32_t idx = win->curr % win->winSize;
+    // Pane *pane = &win->paneBuff[idx];
+    // if (pane->ack)
+    // {
+    //     return 1; // window is open
+    // }
+    // return 0; // window is full
+    return ((win->curr - win->lower) < win->winSize) && (win->paneBuff[win->curr % win->winSize].ack);  // span is less than winSize and the current pane is free
 }
 // func defs end
