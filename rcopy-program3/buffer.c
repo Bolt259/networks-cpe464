@@ -97,22 +97,34 @@ void freePacketBuffer()
 // add a packet to the buffer
 int addPacket(uint8_t *packet, int packetLen, uint32_t seqNum)
 {
-    if (pb == NULL || packet == NULL || packetLen <= 0 || seqNum < pb->nextSeqNum ||
-        seqNum >= pb->nextSeqNum + pb->winSize)
+    if (pb == NULL || packet == NULL || packetLen <= 0 || seqNum < 1)
     {
         if (DEBUG_FLAG)
         {
             fprintf(stderr, "Error: Invalid parameters for addPacket.\n");
         }
-        return -1; // invalid parameters
+        return -1;
     }
-   
+
+    // first valid packet arrival
+    if (pb->storedPackets == 0) pb->nextSeqNum = seqNum;
+
+    if (seqNum < pb->nextSeqNum || seqNum >= pb->nextSeqNum + pb->winSize)
+    {
+        if (DEBUG_FLAG)
+        {
+            fprintf(stderr, "Error: Sequence number %u is out of bounds for the current buffer window with bounds [%u, %u).\n", seqNum, pb->nextSeqNum, pb->nextSeqNum + pb->winSize);
+        }
+        return -1;
+    }
+
     uint32_t idx = seqNum % pb->winSize;
     Packet *pkt = &pb->buffer[idx];
+
     if (!pkt->written)
     {
-        fprintf(stderr, "Error: Packet at index %u is already occupied and hasn't been written, sequence number %u. Please flushBuffer before adding another packet.\n", idx, seqNum);
-        return -1;
+        // fprintf(stderr, "Error: Packet at index %u is already occupied and hasn't been written, sequence number %u. Please flushBuffer before adding another packet.\n", idx, seqNum);
+        return 0;   // packet already in buffer and not written, do nothing
     }
 
     // packetData should be already allocated
@@ -121,17 +133,21 @@ int addPacket(uint8_t *packet, int packetLen, uint32_t seqNum)
         fprintf(stderr, "Error: addPacket called before initPacketBuffer.\n");
         return -1;
     }
+
+    // check for overwrite
+    if (pkt->written == 0 && pkt->packetLen > 0) return 0;
+
     memcpy(pkt->packetData, packet, packetLen);
     pkt->packetLen = packetLen;
     pkt->written = 0;
 
-    if (pb->storedPackets == 0) pb->nextSeqNum = seqNum;    // only set nextSeqNum if this is the first packet buffered or buffer has been flushed
+    // if (pb->storedPackets == 0) pb->nextSeqNum = seqNum;    // only set nextSeqNum if this is the first packet buffered or buffer has been flushed
     pb->storedPackets++;
 
     return 0; // success
 }
 
-// get a packet from the buffer
+// get a packet from the buffer - DEPRACTED DO NOT USE
 int getPacket(uint8_t *packet, int *packetLen, uint32_t seqNum)
 {
     if (pb == NULL || packet == NULL || packetLen == NULL || seqNum < pb->nextSeqNum ||
@@ -214,12 +230,23 @@ int flushBuffer()
         }
     }
 
-    pb->nextSeqNum = 0; // reset nextSeqNum to something it should never be
+    // pb->nextSeqNum = 0; // reset nextSeqNum to something it should never be
     pb->storedPackets = 0; // reset stored packets after flushing
     return totBytesWritten;
 }
 
-// retirn the next sequence number to write
+// returns 1 if the packet is written, 0 if not, -1 on error
+int isWritten(uint32_t seqNum)
+{
+    uint32_t idx = seqNum % pb->winSize;
+    Packet *pkt = &pb->buffer[idx];
+
+    if (pkt->written) return 1;
+
+    return 0;
+}
+
+// return the next sequence number to write
 int getNextSeqNum()
 {
     if (pb == NULL)

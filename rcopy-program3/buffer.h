@@ -36,6 +36,7 @@ int addPacket(uint8_t *packet, int packetLen, uint32_t seqNum);
 int getPacket(uint8_t *packet, int *packetLen, uint32_t seqNum);    // X
 int flushBuffer(); // write packets to the output file and slide
 
+int isWritten(uint32_t seqNum); // returns 1 if packet is written, 0 if not
 int getNextSeqNum();
 int getStoredPackets();
 int bufferOpen(); // 1 = open, 0 = full

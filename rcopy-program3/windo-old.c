@@ -122,7 +122,7 @@ int addPane(uint8_t *packet, int packetLen, uint32_t seqNum)
         return -1;
     }
 
-    uint32_t idx = win->curr % win->winSize;
+    uint32_t idx = seqNum % win->winSize;
     Pane *pane = &win->paneBuff[idx];
     if (!pane->ack)
     {
@@ -196,7 +196,7 @@ int checkPaneAck(uint32_t seqNum)
     return -1;
 }
 
-// slide window up to lowest unACKed sequence number
+// slide window up to a new lower bound
 void slideWindow(uint32_t newLow)
 {
     if (win == NULL || newLow < win->lower || newLow > win->curr)
@@ -206,7 +206,7 @@ void slideWindow(uint32_t newLow)
     }
     if (DEBUG_FLAG)
     {
-        printf("Sliding window from base %u to new base %u.\n", win->lower, newLow);
+        printf("Sliding window from lower %u to new lower %u.\n", win->lower, newLow);
     }
 
     // clear lower panes
@@ -214,13 +214,14 @@ void slideWindow(uint32_t newLow)
     {
         uint32_t idx = seqNum % win->winSize;
         Pane *pane = &win->paneBuff[idx];
-
-        // don't free packet memory just set to 0 so that it can be overwritten later
-        // slide regardless of occupied and ack status because higher ACK was received
-        memset(pane->packet, 0, pane->packetLen);
-        pane->packetLen = 0;
-        pane->seqNum = 0;
-        pane->ack = 1;  // leave ack set so that addPane() can overwrite it
+        if (pane->ack)
+        {
+            // don't free packet memory just set to 0 so that it c an be overwritten later
+            memset(pane->packet, 0, pane->packetLen);
+            pane->packetLen = 0;
+            pane->seqNum = 0;
+            // leave ack set so that addPane() can overwrite it
+        }
     }
     win->lower = newLow;
 }

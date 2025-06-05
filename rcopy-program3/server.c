@@ -124,7 +124,7 @@ void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 	// Process each new clients request
 	STATE state = FILENAME;
 
-	uint32_t seqNum = START_SEQ_NUM;	// state machine global to keep track of the sequence number to send ::: thinking this isn't needed: ________^
+	// uint32_t seqNum = START_SEQ_NUM;	// state machine global to keep track of the sequence number to send ::: thinking this isn't needed: ________^
 
 	uint32_t nextToSend = START_SEQ_NUM; // next sequence number to send, used for FSM global next seqNum to send
 	int eofSent = 0;
@@ -139,51 +139,53 @@ void clientControl(int32_t serverSock, uint8_t *buff, int32_t recvLen, Connectio
 	{
 		switch (state)
 		{
-		case FILENAME:
-			state = filename(client, buff, recvLen, &dataFile, &buffSize);
-			break;
+			case FILENAME:
+				state = filename(client, buff, recvLen, &dataFile, &buffSize);
+				break;
 
-		case SEND_PACKET:
-			if (!eofSent)
-			{
-				state = sendPacket(client, packet, &packetLen, dataFile, buffSize, &nextToSend, &eofSent);
-			}
-			else
-			{
-				state = WAIT_EOF_ACK; // if EOF sent, wait for ACK
-			}
-			break;
+			case SEND_PACKET:
+				if (!eofSent)
+				{
+					state = sendPacket(client, packet, &packetLen, dataFile, buffSize, &nextToSend, &eofSent);
+				}
+				else
+				{
+					state = WAIT_EOF_ACK; // if EOF sent, wait for ACK
+				}
+				break;
 
-		case WAITER:
-			state = waiter(client);
-			break;
+			case WAITER:
+				state = waiter(client);
+				break;
 
-		case HANDLE_FEEDBACK:
-			state = handleFeedback(client, packet, &nextToSend);
-			break;
+			case HANDLE_FEEDBACK:
+				state = handleFeedback(client, packet, &nextToSend);
+				break;
 
-		case TIMEOUT_RESEND:
-			state = timeoutResend(client, packet, &packetLen, getLowerBound(), &retryCnt);	// is this getLowerBound usage right here and below??
-			break;
+			case TIMEOUT_RESEND:
+				state = timeoutResend(client, packet, &packetLen, getLowerBound(), &retryCnt);	// is this getLowerBound usage right here and below??
+				break;
 
-		case WAIT_EOF_ACK:
-			state = waitEofAck(client, packet);
-			break;
+			case WAIT_EOF_ACK:
+				state = waitEofAck(client, packet);
+				break;
 
-		case TIMEOUT_EOF_RESEND:
-			state = timeoutEofResend(client, packet, &packetLen, getLowerBound(), &retryCnt);
-			break;
+			case TIMEOUT_EOF_RESEND:
+				state = timeoutEofResend(client, packet, &packetLen, getLowerBound(), &retryCnt);
+				break;
 
-		case DONE:
-			cleanup(dataFile, client);
-			break;
-
-		default:
-			printf("ERROR - In default state, this is bad.. (clientControl)\n");
-			state = DONE;
-			break;
+			case DONE:
+				break;
+			
+			default:
+				printf("ERROR - In default state, this is bad.. (clientControl)\n");
+				state = DONE;
+				break;
 		}
 	}
+
+	// DONE State
+	cleanup(dataFile, client);
 }
 
 STATE filename(Connection *client, uint8_t *buff, int32_t recvLen,
@@ -367,9 +369,15 @@ STATE handleFeedback(Connection *client, uint8_t *packet, uint32_t *seqNum)
 	uint32_t ackSeqNum = 0;
 	uint8_t nullBuff[MAX_PAYLOAD] = {0};
 	int32_t recvLen = recvBuff(nullBuff, MAX_PACK_LEN, client->socketNum, client, &flag, &ackSeqNum);
+	if (recvLen == CRC_ERROR)
+	{
+		if (DEBUG_FLAG)
+			printf("{ERROR} handleFeedback: CRC error on feedback packet, ignoring.\n");
+		return WAITER; // ignore crc errors
+	}
 	if (flag == ACK_RR)
 	{
-		markPaneAck(ackSeqNum);
+		// markPaneAck(ackSeqNum);	// DONT THINK THIS IS EVEN NEEDED
 		slideWindow(ackSeqNum + 1);
 		// *seqNum = ackSeqNum + 1; // update server state global to next packet
 	}
@@ -426,13 +434,19 @@ STATE waitEofAck(Connection *client, uint8_t *packet)
 		uint32_t ackSeqNum = 0;
 		uint8_t nullBuff[MAX_PAYLOAD] = {0};
 		int32_t recvLen = recvBuff(nullBuff, MAX_PACK_LEN, client->socketNum, client, &flag, &ackSeqNum);	// try NULL recvs for the rest of the states
+		if (recvLen == CRC_ERROR)
+		{
+			if (DEBUG_FLAG)
+				printf("{ERROR} waitEofAck: CRC error on EOF ACK packet, ignoring.\n");
+			return WAIT_EOF_ACK; // ignore crc errors
+		}
 		if (flag == EOF_ACK)
 		{
 			return DONE;
 		}
 		else if (flag == ACK_RR)
 		{
-			markPaneAck(ackSeqNum);
+			// markPaneAck(ackSeqNum);	// DONT THINK THIS IS EVEN NEEDED
 			slideWindow(ackSeqNum + 1);
 			return SEND_PACKET;
 		}

@@ -78,30 +78,35 @@ void transferFile(char *argv[])
     {
         switch (state)
         {
-        case START:
-            state = start_state(argv, server, &expectedSeqNum, winSize, buffSize);
-            break;
-        case FNAME_RECV:
-            state = fnameRecv(argv[1], server);
-            break;
-        case FILE_OK:
-            state = file_ok(&outFileFd, argv[2], winSize, buffSize);
-            break;
-        case RECV_DATA:
-            state = recvData(outFileFd, server, &expectedSeqNum);
-            break;
-        case DONE:
-            if (outFileFd > 0)
-            {
-                close(outFileFd);
-            }
-            free(server);
-            break;
-        default:
-            fprintf(stderr, "ERROR - In default state (transferFile)\n");
-            exit(-1);
+            case START:
+                state = start_state(argv, server, &expectedSeqNum, winSize, buffSize);
+                break;
+
+            case FNAME_RECV:
+                state = fnameRecv(argv[1], server);
+                break;
+
+            case FILE_OK:
+                state = file_ok(&outFileFd, argv[2], winSize, buffSize);
+                break;
+
+            case RECV_DATA:
+                state = recvData(outFileFd, server, &expectedSeqNum);
+                break;
+
+            default:
+                fprintf(stderr, "ERROR - In default state (transferFile)\n");
+                exit(-1);
+                break;
         }
     }
+
+    // DONE State
+    if (outFileFd > 0)
+    {
+        close(outFileFd);
+    }
+    free(server);
 }
 
 STATE start_state(char **argv, Connection *server, uint32_t *expectedSeqNum, uint32_t winSize, int32_t buffSize)
