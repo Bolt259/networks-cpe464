@@ -105,10 +105,10 @@ void serverTransfer(int serverSock)
 			}
 			if (pid == 0)
 			{
-				//~!*
-				printf("Press Enter to continue into child process...\n");
-				getchar(); // wait for user input to debug
-				//~!*
+				// //~!*
+				// printf("Press Enter to continue into child process...\n");
+				// getchar(); // wait for user input to debug
+				// //~!*
 
 				// child process
 				printf("Child fork() - child pid: %d\n", getpid());

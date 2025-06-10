@@ -212,11 +212,11 @@ STATE file_ok(int *outFileFd, char *outFileName, uint32_t winSize, int32_t buffS
 
 STATE recvData(int32_t outFile, Connection *server, uint32_t *expectedSeqNum)
 {
-    uint32_t ackSeqNum = 0;
-    uint8_t flag = 0;
-    int32_t dataLen = 0;
     uint8_t dataBuff[MAX_PACK_LEN];
     uint8_t packet[MAX_PACK_LEN];
+    uint8_t flag = 0;
+    uint32_t ackSeqNum = 0;
+    int32_t dataLen = 0;
 
     if (selectCall(server->socketNum, LONG_TIME, 0) == 0)
     {
@@ -241,7 +241,7 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *expectedSeqNum)
     }
     else if (flag == DATA || flag == SREJ_DATA || flag == TIMEOUT_DATA)
     {
-        
+        // recv out of order packet
         if (ackSeqNum > *expectedSeqNum)
         {
             // out of order packet -> buffer and send SREJ
@@ -254,10 +254,12 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *expectedSeqNum)
                 }
             }
 
+            // send SREJ
             ackSeqNum = htonl(*expectedSeqNum); // this is unnecessary because the buffer/packet won't even be read by the server in this case
             sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, SREJ, *expectedSeqNum, packet);
             return RECV_DATA;
         }
+        // recv expected packet
         else if (ackSeqNum == *expectedSeqNum)
         {
             if (needFlush())
@@ -283,17 +285,18 @@ STATE recvData(int32_t outFile, Connection *server, uint32_t *expectedSeqNum)
 
                 (*expectedSeqNum)++;
             }
+            // either alr written or just received this packet -> send ACK_RR
+            ackSeqNum = htonl(*expectedSeqNum - 1); // send ack for the last expected seq num that should be alr written
+            sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK_RR, ((*expectedSeqNum) - 1), packet);
+            return RECV_DATA;
         }
-        // either alr written or just received this packet -> send ACK_RR
-        ackSeqNum = htonl(*expectedSeqNum - 1); // send ack for the last expected seq num that should be alr written
-        sendBuff((uint8_t *)&ackSeqNum, sizeof(ackSeqNum), server, ACK_RR, ((*expectedSeqNum) - 1), packet);
     }
     else
     {
         fprintf(stderr, "ERROR - recvData: received unexpected flag %d\n", flag);
         return DONE;
     }
-    return RECV_DATA;
+    return RECV_DATA; // default case, just to make the warning go away
 }
 
 void checkArgs(int argc, char *argv[], float *errorRate)
