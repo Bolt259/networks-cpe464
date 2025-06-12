@@ -301,7 +301,7 @@ STATE sendPacket(Connection *client, uint8_t *packet, int32_t *packetLen,
 			return DONE;
 		}
 		else
-		{		// normal sending case
+		{	// normal sending case
 			addPane(dataBuff, lenRead, *seqNum);
 			*packetLen = sendBuff(dataBuff, lenRead, client, DATA, *seqNum, packet);
 			(*seqNum)++;
@@ -379,6 +379,7 @@ STATE handleFeedback(Connection *client, uint8_t *packet, uint32_t *seqNum)
 	{
 		// markPaneAck(ackSeqNum);	// DONT THINK THIS IS EVEN NEEDED
 		slideWindow(ackSeqNum + 1);
+		*seqNum = getCurrSeqNum();
 		// *seqNum = ackSeqNum + 1; // update server state global to next packet
 	}
 	else if (flag == SREJ)
